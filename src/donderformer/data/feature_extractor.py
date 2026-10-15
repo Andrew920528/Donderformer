@@ -19,7 +19,7 @@ from pathlib import Path
 import numpy as np
 
 from donderformer.data.audio import N_MELS, SR, events_to_labels, log_mel_features
-from donderformer.data.splits import manifest_hash, read_manifest
+from donderformer.data.data_splitter import manifest_hash, read_manifest
 from donderformer.data.tja import course_sections, parse_events
 from donderformer.paths import DataPaths
 

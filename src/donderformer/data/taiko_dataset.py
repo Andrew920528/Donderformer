@@ -17,8 +17,8 @@ import numpy as np
 import torch
 from torch.utils.data import Dataset, Sampler
 
-from donderformer.data.features import FeatureExtractor
-from donderformer.data.splits import read_manifest
+from donderformer.data.feature_extractor import FeatureExtractor
+from donderformer.data.data_splitter import read_manifest
 from donderformer.paths import DataPaths
 
 

@@ -11,10 +11,9 @@ Donderformer/
 │   └── data/
 │       ├── tja.py           # TJA parsing and validation
 │       ├── audio.py         # log-mel features, frame labels
-│       ├── scan.py          # one metadata row per chart
-│       ├── splits.py        # DataSplitter
-│       ├── features.py      # FeatureExtractor
-│       └── dataset.py       # TaikoDataset, SongBatchSampler
+│       ├── data_splitter.py      # DataSplitter: scan, filter, split, report
+│       ├── feature_extractor.py  # FeatureExtractor
+│       └── taiko_dataset.py      # TaikoDataset, SongBatchSampler
 ├── notebooks/               # one notebook per process
 │   ├── 01_make_split.ipynb
 │   ├── 02_extract_features.ipynb
@@ -33,7 +32,7 @@ cd /path/to/Donderformer
 uv sync
 ```
 
-This creates `.venv/` with the pinned dependencies (`uv.lock`) and installs `donderformer` in editable mode, so `import donderformer` works everywhere. Run things through it with `uv run`, e.g. `uv run python -m donderformer.data.scan`, or pick the `.venv` interpreter as the notebook kernel in VS Code.
+This creates `.venv/` with the pinned dependencies (`uv.lock`) and installs `donderformer` in editable mode, so `import donderformer` works everywhere. Run things through it with `uv run`, e.g. `uv run jupyter lab`, or pick the `.venv` interpreter as the notebook kernel in VS Code.
 
 ## Where the data lives
 
