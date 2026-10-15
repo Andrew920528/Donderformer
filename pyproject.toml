@@ -7,10 +7,17 @@ name = "donderformer"
 version = "0.1.0"
 description = "Transformer-based Taiko no Tatsujin chart generation"
 requires-python = ">=3.10"
-dependencies = ["numpy"]
+dependencies = [
+    "numpy",
+    "matplotlib",
+    "torch",
+]
 
-[project.optional-dependencies]
-train = ["torch"]
+[dependency-groups]
+dev = [
+    "ipykernel",
+    "jupyter",
+]
 
 [tool.setuptools.packages.find]
 where = ["src"]

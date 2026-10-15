@@ -21,12 +21,14 @@ Donderformer/
 
 ## Setup
 
+The environment is managed with [uv](https://docs.astral.sh/uv/):
+
 ```bash
 cd /path/to/Donderformer
-pip install -e ".[train]"
+uv sync
 ```
 
-This makes `import donderformer` work from any notebook. Re-running it is only needed if `pyproject.toml` changes.
+This creates `.venv/` with the pinned dependencies (`uv.lock`) and installs `donderformer` in editable mode, so `import donderformer` works everywhere. Run things through it with `uv run`, e.g. `uv run python -m donderformer.data.scan`, or pick the `.venv` interpreter as the notebook kernel in VS Code.
 
 ## Where the data lives
 
