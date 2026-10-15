@@ -5,10 +5,10 @@ data/
 ├── raw/                # ESE song folders, e.g. "01 Pop/<song>/<song>.tja" (gitignored)
 ├── splits/             # committed
 │   ├── manifest.csv          # accepted charts + song_id + split
-│   ├── scan_report.json      # scan summary: totals and rejection reasons
-│   └── split.json            # song IDs per split (seed 42)
+│   └── scan_report.json      # scan summary: totals and rejection reasons
 └── processed/<run>/    # preprocessing output for one configuration (gitignored)
-    ├── split.json, normalization.npz, summary.json
+    ├── manifest.csv          # snapshot of the charts (and split) this run used
+    ├── normalization.npz, summary.json
     ├── raw/<song_id>/        # features_raw.npy, labels.npy, metadata.json
     └── normalized/<song_id>/ # features.npy, windows.npz
 ```

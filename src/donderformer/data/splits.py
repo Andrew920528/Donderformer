@@ -1,13 +1,12 @@
 """Reproducible song-level train/validation/test split.
 
-Reads ``splits/manifest.csv`` (accepted charts, from ``scan.py``), adds
-``song_id`` and ``split`` columns in place, and writes ``splits/split.json``
-(song IDs per split). All charts sharing one audio file
+Reads ``splits/manifest.csv`` (accepted charts, from ``scan.py``) and adds
+``song_id`` and ``split`` columns in place. The manifest is the only record of
+the split; ``read_split`` turns any manifest into song-ID lists. All charts sharing one audio file
 land in the same split.
 """
 import csv
 import hashlib
-import json
 import random
 import re
 from pathlib import PurePosixPath
@@ -58,7 +57,6 @@ def make_split(paths: DataPaths, seed: int = SEED, train_pct: int = 80, validati
     ids = [row["song_id"] for row in accepted]
     assert len(ids) == len(set(ids)), "song_id collision"
 
-    paths.split_file.write_text(json.dumps(split, indent=2, ensure_ascii=False), encoding="utf-8")
     with paths.manifest.open("w", encoding="utf-8", newline="") as f:
         writer = csv.DictWriter(f, fieldnames=fieldnames + ["song_id", "split"], extrasaction="ignore")
         writer.writeheader()
@@ -70,6 +68,15 @@ def make_split(paths: DataPaths, seed: int = SEED, train_pct: int = 80, validati
         count = sum(1 for a in songs if audio_split[a] == name)
         percentage = 100 * count / n_songs if n_songs else 0
         print(f"{name}: {count} songs ({percentage:.2f}%), {len(split[name])} charts")
+    return split
+
+
+def read_split(manifest_path):
+    """``{"train": [song_id, ...], "validation": [...], "test": [...]}`` from a manifest."""
+    split = {name: [] for name in SPLITS}
+    with open(manifest_path, encoding="utf-8-sig", newline="") as f:
+        for row in csv.DictReader(f):
+            split[row["split"]].append(row["song_id"])
     return split
 
 

@@ -2,12 +2,12 @@
 from __future__ import annotations
 
 import bisect
-import json
 
 import numpy as np
 import torch
 from torch.utils.data import Dataset, Sampler
 
+from donderformer.data.splits import read_split
 from donderformer.paths import DataPaths
 
 
@@ -21,8 +21,10 @@ class TaikoDataset(Dataset):
     def __init__(self, paths: DataPaths, run_name: str, split: str = "train"):
         self.run_dir = paths.processed(run_name)
         self.window_dir = self.run_dir / "normalized"
-        self.split = json.loads((self.run_dir / "split.json").read_text())
-        self.song_ids = [str(x) for x in self.split[split]]
+        # The run's own manifest snapshot, not splits/manifest.csv, so a run
+        # always loads the songs it was preprocessed (and normalized) with.
+        self.split = read_split(self.run_dir / "manifest.csv")
+        self.song_ids = self.split[split]
         self.lengths = []
         for song_id in self.song_ids:
             with np.load(self.window_dir / song_id / "windows.npz") as d:
