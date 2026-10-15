@@ -9,7 +9,7 @@ Every data root has the same layout, so the toy dataset is just another root::
 
     data/
     ├── raw/                 # ESE song folders (genre/song/*.tja, audio)
-    ├── splits/              # manifest.csv, split.json (committed)
+    ├── splits/              # manifest.csv, scan_report.json, split.json (committed)
     └── processed/<run>/     # preprocessing output for one configuration
 """
 from __future__ import annotations
@@ -46,6 +46,10 @@ class DataPaths:
     @property
     def manifest(self) -> Path:
         return self.splits / "manifest.csv"
+
+    @property
+    def scan_report(self) -> Path:
+        return self.splits / "scan_report.json"
 
     @property
     def split_file(self) -> Path:

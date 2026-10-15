@@ -1,8 +1,8 @@
 """Reproducible song-level train/validation/test split.
 
-Reads ``splits/manifest_strict.csv`` (from ``scan.py``) and writes
-``splits/manifest.csv`` (accepted charts + ``song_id`` + ``split``) and
-``splits/split.json`` (song IDs per split). All charts sharing one audio file
+Reads ``splits/manifest.csv`` (accepted charts, from ``scan.py``), adds
+``song_id`` and ``split`` columns in place, and writes ``splits/split.json``
+(song IDs per split). All charts sharing one audio file
 land in the same split.
 """
 import csv
@@ -29,9 +29,10 @@ def song_id(tja: str) -> str:
 
 
 def make_split(paths: DataPaths, seed: int = SEED, train_pct: int = 80, validation_pct: int = 10):
-    with (paths.splits / "manifest_strict.csv").open(encoding="utf-8-sig", newline="") as f:
+    with paths.manifest.open(encoding="utf-8-sig", newline="") as f:
         reader = csv.DictReader(f)
-        fieldnames = reader.fieldnames
+        # Drop columns from a previous split so re-running is safe.
+        fieldnames = [c for c in reader.fieldnames if c not in ("song_id", "split")]
         accepted = [row for row in reader if row["status"] == "accepted"]
 
     # Sort before shuffling so the CSV row order does not affect the split.
@@ -59,7 +60,7 @@ def make_split(paths: DataPaths, seed: int = SEED, train_pct: int = 80, validati
 
     paths.split_file.write_text(json.dumps(split, indent=2, ensure_ascii=False), encoding="utf-8")
     with paths.manifest.open("w", encoding="utf-8", newline="") as f:
-        writer = csv.DictWriter(f, fieldnames=fieldnames + ["song_id", "split"])
+        writer = csv.DictWriter(f, fieldnames=fieldnames + ["song_id", "split"], extrasaction="ignore")
         writer.writeheader()
         writer.writerows(accepted)
 

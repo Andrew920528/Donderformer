@@ -4,6 +4,7 @@ Paths in the manifest are relative to ``DataPaths.raw`` so it works from any mac
 """
 from pathlib import Path
 import csv
+import json
 import re
 from collections import Counter
 
@@ -312,18 +313,16 @@ def scan_chart(tja, raw_dir):
 
 
 def scan_dataset(paths: DataPaths):
-    """Scan every TJA under ``paths.raw`` and write ``splits/manifest_strict.csv``."""
+    """Scan every TJA under ``paths.raw``.
+
+    Writes ``splits/manifest.csv`` (accepted charts only; ``splits.py`` then adds
+    ``song_id`` and ``split``) and ``splits/scan_report.json`` (summary counts).
+    """
     tjas = sorted(paths.raw.rglob("*.tja"))
     if not tjas:
         # Guard: an empty scan would overwrite the committed manifest and split.
         raise FileNotFoundError(f"No .tja files under {paths.raw}. Wrong data root?")
     rows = [scan_chart(tja, paths.raw) for tja in tjas]
-
-    paths.splits.mkdir(parents=True, exist_ok=True)
-    with open(paths.splits / "manifest_strict.csv", "w", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=FIELDNAMES)
-        writer.writeheader()
-        writer.writerows(rows)
 
     accepted = [r for r in rows if r["status"] == "accepted"]
     rejected = [r for r in rows if r["status"] == "rejected"]
@@ -335,6 +334,21 @@ def scan_dataset(paths: DataPaths):
             if reason:
                 reason_counts[reason] += 1
 
+    paths.splits.mkdir(parents=True, exist_ok=True)
+    with paths.manifest.open("w", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=FIELDNAMES)
+        writer.writeheader()
+        writer.writerows(accepted)
+
+    report = {
+        "total_charts": len(rows),
+        "accepted": len(accepted),
+        "rejected": len(rejected),
+        # A chart can have several reasons, so these can sum to more than "rejected".
+        "rejection_reasons": dict(reason_counts.most_common()),
+    }
+    paths.scan_report.write_text(json.dumps(report, indent=2), encoding="utf-8")
+
     print("Total TJA:", len(rows))
     print("Strict accepted:", len(accepted))
     print("Rejected:", len(rejected))
@@ -343,7 +357,7 @@ def scan_dataset(paths: DataPaths):
     for reason, count in reason_counts.most_common(20):
         print(f"{reason}: {count}")
 
-    return rows
+    return report
 
 
 if __name__ == "__main__":
