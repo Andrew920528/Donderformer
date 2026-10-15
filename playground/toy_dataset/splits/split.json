@@ -1,0 +1,10 @@
+{
+  "seed": 42,
+  "train": [
+    "yes_or_yes_04141b"
+  ],
+  "validation": [],
+  "test": [
+    "idol_9132a1"
+  ]
+}

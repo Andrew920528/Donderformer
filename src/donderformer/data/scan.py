@@ -1,10 +1,13 @@
-# We scan qualified songs from the PACE dataset.
+"""Scan raw ESE charts and record which Oni charts the preprocessing supports.
+
+Paths in the manifest are relative to ``DataPaths.raw`` so it works from any machine.
+"""
 from pathlib import Path
 import csv
 import re
 from collections import Counter
 
-ROOT = Path("ESE")
+from donderformer.paths import DataPaths
 
 SUPPORTED_NOTES = set("0123456789AB")
 IGNORED_COMMANDS = {
@@ -188,18 +191,44 @@ def validate_oni_chart(lines):
     return sorted(set(reasons)), note_counts, playable_notes, has_measure
 
 
-rows = []
+FIELDNAMES = [
+    "title",
+    "tja",
+    "audio",
+    "bpm",
+    "offset",
+    "oni_sections",
+    "playable_notes",
+    "has_measure",
+    "count_1",
+    "count_2",
+    "count_3",
+    "count_4",
+    "count_A",
+    "count_B",
+    "count_5",
+    "count_6",
+    "count_7",
+    "count_8",
+    "count_9",
+    "status",
+    "reason",
+]
 
-for tja in ROOT.rglob("*.tja"):
+
+def scan_chart(tja, raw_dir):
+    """Validate one TJA file; returns one manifest row."""
+    rel = lambda p: p.relative_to(raw_dir).as_posix()
+
     try:
         text = tja.read_text(
             encoding="utf-8-sig",
             errors="replace"
         )
     except Exception as e:
-        rows.append({
+        return {
             "title": tja.stem,
-            "tja": str(tja),
+            "tja": rel(tja),
             "audio": "",
             "bpm": "",
             "offset": "",
@@ -208,8 +237,7 @@ for tja in ROOT.rglob("*.tja"):
             "has_measure": False,
             "status": "rejected",
             "reason": f"read_error:{type(e).__name__}",
-        })
-        continue
+        }
 
     title = get_metadata(text, "TITLE") or tja.stem
     wave = get_metadata(text, "WAVE")
@@ -268,111 +296,51 @@ for tja in ROOT.rglob("*.tja"):
 
     reasons = sorted(set(reasons))
 
-    rows.append({
+    return {
         "title": title,
-        "tja": str(tja),
-        "audio": str(audio) if audio else "",
+        "tja": rel(tja),
+        "audio": rel(audio) if audio else "",
         "bpm": bpm if bpm is not None else "",
         "offset": offset,
         "oni_sections": len(oni_sections),
         "playable_notes": playable_notes,
         "has_measure": has_measure,
-        "count_1": note_counts["1"],
-        "count_2": note_counts["2"],
-        "count_3": note_counts["3"],
-        "count_4": note_counts["4"],
-        "count_A": note_counts["A"],
-        "count_B": note_counts["B"],
-        "count_5": note_counts["5"],
-        "count_6": note_counts["6"],
-        "count_7": note_counts["7"],
-        "count_8": note_counts["8"],
-        "count_9": note_counts["9"],
+        **{f"count_{c}": note_counts[c] for c in "1234AB56789"},
         "status": "accepted" if not reasons else "rejected",
         "reason": ";".join(reasons),
-    })
+    }
 
 
-fieldnames = [
-    "title",
-    "tja",
-    "audio",
-    "bpm",
-    "offset",
-    "oni_sections",
-    "playable_notes",
-    "has_measure",
-    "count_1",
-    "count_2",
-    "count_3",
-    "count_4",
-    "count_A",
-    "count_B",
-    "count_5",
-    "count_6",
-    "count_7",
-    "count_8",
-    "count_9",
-    "status",
-    "reason",
-]
+def scan_dataset(paths: DataPaths):
+    """Scan every TJA under ``paths.raw`` and write ``splits/manifest_strict.csv``."""
+    rows = [scan_chart(tja, paths.raw) for tja in sorted(paths.raw.rglob("*.tja"))]
 
-with open(
-    "manifest_strict.csv",
-    "w",
-    newline="",
-    encoding="utf-8"
-) as f:
-    writer = csv.DictWriter(f, fieldnames=fieldnames)
-    writer.writeheader()
-    writer.writerows(rows)
+    paths.splits.mkdir(parents=True, exist_ok=True)
+    with open(paths.splits / "manifest_strict.csv", "w", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=FIELDNAMES)
+        writer.writeheader()
+        writer.writerows(rows)
+
+    accepted = [r for r in rows if r["status"] == "accepted"]
+    rejected = [r for r in rows if r["status"] == "rejected"]
+
+    reason_counts = Counter()
+
+    for row in rejected:
+        for reason in row["reason"].split(";"):
+            if reason:
+                reason_counts[reason] += 1
+
+    print("Total TJA:", len(rows))
+    print("Strict accepted:", len(accepted))
+    print("Rejected:", len(rejected))
+
+    print("\nTop rejection reasons:")
+    for reason, count in reason_counts.most_common(20):
+        print(f"{reason}: {count}")
+
+    return rows
 
 
-accepted = [r for r in rows if r["status"] == "accepted"]
-rejected = [r for r in rows if r["status"] == "rejected"]
-
-reason_counts = Counter()
-
-for row in rejected:
-    for reason in row["reason"].split(";"):
-        if reason:
-            reason_counts[reason] += 1
-
-
-print("Total TJA:", len(rows))
-print("Strict accepted:", len(accepted))
-print("Rejected:", len(rejected))
-
-print("\nTop rejection reasons:")
-for reason, count in reason_counts.most_common(20):
-    print(f"{reason}: {count}")
-
-print("\nFirst 20 accepted:")
-for row in accepted[:20]:
-    print(
-        row["title"],
-        "| BPM:", row["bpm"],
-        "| notes:", row["playable_notes"],
-        "| measure:", row["has_measure"],
-    )
-
-import random
-
-random.seed(42)
-selected = random.sample(accepted, 15)
-
-print("\nSelected 15:")
-for i, row in enumerate(selected, 1):
-    print(
-        i,
-        row["title"],
-        "| BPM:", row["bpm"],
-        "| notes:", row["playable_notes"],
-        "| measure:", row["has_measure"],
-        "|", row["tja"]
-    )
-
-with open("selected_15.csv", "w", newline="", encoding="utf-8") as f:
-    writer = csv.DictWriter(f, fieldnames=fieldnames)
-    writer.writeheader()
-    writer.writerows(selected)
+if __name__ == "__main__":
+    scan_dataset(DataPaths())
