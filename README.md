@@ -61,7 +61,7 @@ mkdir -p "$REPO/data/raw" && mv "$ESE"/* "$REPO/data/raw/" && rmdir "$ESE"
 Feature caches and checkpoints move between PACE and a laptop with rsync, never git:
 
 ```bash
-rsync -avzP yhsu72@login-ice.pace.gatech.edu:/scratch/taiko/Taiko_DL/Donderformer/data/features/frame23ms/ /Users/xuyanshuo/projects/Taiko_DL/Donderformer/data/features/frame23ms/
+rsync -avzP yhsu72@login-ice.pace.gatech.edu:~/scratch/Taiko_DL/Donderformer/data/features/frame23ms/ /Users/xuyanshuo/projects/Taiko_DL/Donderformer/data/features/frame23ms/
 ```
 
 With the default window sizes each sample has `X` of length 1385 and `Y` of shape `(4, 7)`.
