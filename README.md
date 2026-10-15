@@ -8,12 +8,17 @@ A study of Transformers for Taiko no Tatsujin chart generation, with a CNN-LSTM 
 Donderformer/
 ├── src/donderformer/        # importable logic
 │   ├── paths.py             # DataPaths: where data lives
-│   └── data/                # scan.py, splits.py, dataset.py (TaikoDataset)
+│   └── data/
+│       ├── tja.py           # TJA parsing and validation
+│       ├── audio.py         # log-mel features, frame labels
+│       ├── scan.py          # one metadata row per chart
+│       ├── splits.py        # DataSplitter
+│       ├── features.py      # FeatureExtractor
+│       └── dataset.py       # TaikoDataset, SongBatchSampler
 ├── notebooks/               # one notebook per process
-│   ├── 01_scan_and_split.ipynb
-│   ├── 02_preprocess.ipynb
-│   ├── 03_train_lstm.ipynb
-│   └── reference/taikonation_repro.ipynb
+│   ├── 01_make_split.ipynb
+│   ├── 02_extract_features.ipynb
+│   └── 03_train_lstm.ipynb
 ├── data/                    # see data/README.md; only data/splits/ is committed
 ├── outputs/                 # checkpoints and generated charts (gitignored)
 └── playground/              # scratch (gitignored) + toy_dataset/ (committed)
@@ -32,7 +37,7 @@ This creates `.venv/` with the pinned dependencies (`uv.lock`) and installs `don
 
 ## Where the data lives
 
-`DataPaths()` uses the `DONDER_DATA` environment variable if set, otherwise `<repo>/data`. Every data root has the same layout (`raw/`, `splits/`, `processed/<run>/`), so switching datasets is one line:
+`DataPaths()` uses the `DONDER_DATA` environment variable if set, otherwise `<repo>/data`. Every data root has the same layout (`raw/`, `splits/`, `features/`), so switching datasets is one line:
 
 ```python
 from donderformer.paths import DataPaths
@@ -50,17 +55,17 @@ mkdir -p "$REPO/data/raw" && mv "$ESE"/* "$REPO/data/raw/" && rmdir "$ESE"
 
 ## Pipeline
 
-1. **`01_scan_and_split.ipynb`** scans `raw/` for Oni charts the parser supports, then splits them 80/10/10 by audio file (seed 42). Output goes to `splits/`. The committed `data/splits/` already holds the split used so far, so this only needs re-running when the dataset changes.
-2. **`02_preprocess.ipynb`** turns each chart into 23 ms log-mel frames and 7-class labels, normalizes with training-set statistics and builds sliding windows. Output goes to `processed/<RUN_NAME>/`.
-3. **`03_train_lstm.ipynb`** trains and evaluates the CNN-LSTM baseline on `processed/<RUN_NAME>/` and saves the checkpoint to `outputs/checkpoints/`.
+1. **`01_make_split.ipynb`** uses a `DataSplitter` (courses, genres, BPM and level ranges, ratios, seed) to pick charts and split them by audio file. It writes `splits/<name>/` with `config.json`, `manifest.csv` and a `report.json` of what was kept, what was lost and why, plus distributions. Splits are never edited in place; a new filter means a new name. `data/splits/oni_v1` is the Oni split used so far.
+2. **`02_extract_features.ipynb`** uses a `FeatureExtractor` (frame length) to cache log-mel per audio file and labels per chart under `features/<extractor.id>/`, then fits that split's normalization on its train songs. Cached songs are skipped, so new splits are cheap.
+3. **`03_train_lstm.ipynb`** loads `TaikoDataset(paths, split, extractor, part, audio_frames, history_frames, target_frames)`, which cuts windows on the fly, then trains and evaluates the CNN-LSTM baseline and saves the checkpoint to `outputs/checkpoints/`.
 
-Processed data and checkpoints move between PACE and a laptop with rsync, never git:
+Feature caches and checkpoints move between PACE and a laptop with rsync, never git:
 
 ```bash
-rsync -avzP yhsu72@login-ice.pace.gatech.edu:/scratch/taiko/Taiko_DL/Donderformer/data/processed/frame23ms_oni/ /Users/xuyanshuo/projects/Taiko_DL/Donderformer/data/processed/frame23ms_oni/
+rsync -avzP yhsu72@login-ice.pace.gatech.edu:/scratch/taiko/Taiko_DL/Donderformer/data/features/frame23ms/ /Users/xuyanshuo/projects/Taiko_DL/Donderformer/data/features/frame23ms/
 ```
 
-Each `windows.npz` contains `X` with shape `(number_of_windows, 1385)` and `Y` with shape `(number_of_windows, 4, 7)`.
+With the default window sizes each sample has `X` of length 1385 and `Y` of shape `(4, 7)`.
 
 ## Model Input
 

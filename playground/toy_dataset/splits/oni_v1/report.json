@@ -1,0 +1,131 @@
+{
+  "name": "oni_v1",
+  "config": {
+    "name": "oni_v1",
+    "courses": [
+      "oni"
+    ],
+    "genres": null,
+    "bpm_range": null,
+    "level_range": null,
+    "ratios": [
+      0.8,
+      0.1,
+      0.1
+    ],
+    "seed": 42
+  },
+  "totals": {
+    "scanned_charts": 8,
+    "usable_charts": 5,
+    "kept_charts": 2,
+    "kept_songs": 2,
+    "lost_charts": 6
+  },
+  "lost_reasons": {
+    "course_not_selected": 3,
+    "nested_long_note": 3
+  },
+  "scanned_by_course": {
+    "easy": 2,
+    "normal": 2,
+    "hard": 2,
+    "oni": 2
+  },
+  "usable_by_course": {
+    "easy": 1,
+    "hard": 1,
+    "normal": 1,
+    "oni": 2
+  },
+  "kept_by": {
+    "split": {
+      "train": 1,
+      "validation": 0,
+      "test": 1
+    },
+    "course": {
+      "oni": 2
+    },
+    "genre": {
+      "": 2
+    },
+    "level": {
+      "6": 1,
+      "8": 1
+    },
+    "split_course": {
+      "train": {
+        "oni": 1
+      },
+      "validation": {},
+      "test": {
+        "oni": 1
+      }
+    }
+  },
+  "kept_bpm": [
+    138.0,
+    166.0
+  ],
+  "kept": [
+    "idol_9132a1_oni",
+    "yes_or_yes_04141b_oni"
+  ],
+  "lost": [
+    {
+      "chart_id": "idol_9132a1_hard",
+      "title": "Idol",
+      "course": "hard",
+      "tja": "Idol/Idol.tja",
+      "reasons": [
+        "course_not_selected"
+      ]
+    },
+    {
+      "chart_id": "idol_9132a1_normal",
+      "title": "Idol",
+      "course": "normal",
+      "tja": "Idol/Idol.tja",
+      "reasons": [
+        "course_not_selected"
+      ]
+    },
+    {
+      "chart_id": "idol_9132a1_easy",
+      "title": "Idol",
+      "course": "easy",
+      "tja": "Idol/Idol.tja",
+      "reasons": [
+        "course_not_selected"
+      ]
+    },
+    {
+      "chart_id": "yes_or_yes_04141b_hard",
+      "title": "YES or YES",
+      "course": "hard",
+      "tja": "yes_or_yes/YES or YES.tja",
+      "reasons": [
+        "nested_long_note"
+      ]
+    },
+    {
+      "chart_id": "yes_or_yes_04141b_normal",
+      "title": "YES or YES",
+      "course": "normal",
+      "tja": "yes_or_yes/YES or YES.tja",
+      "reasons": [
+        "nested_long_note"
+      ]
+    },
+    {
+      "chart_id": "yes_or_yes_04141b_easy",
+      "title": "YES or YES",
+      "course": "easy",
+      "tja": "yes_or_yes/YES or YES.tja",
+      "reasons": [
+        "nested_long_note"
+      ]
+    }
+  ]
+}

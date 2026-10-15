@@ -1,4 +1,14 @@
-"""PyTorch dataset over preprocessed TaikoNation-style windows."""
+"""TaikoDataset: TaikoNation-style windows cut on the fly from cached features.
+
+For frame ``i`` of a chart, one sample is
+
+    X = [mel frames i-A+1 .. i  (A x n_mels),  label frames i-H .. i-1  (H x 7)]  flattened
+    Y = label frames i .. i+T-1  (T x 7)
+
+with A = ``audio_frames``, H = ``history_frames``, T = ``target_frames`` and zero
+padding before the start. The defaults (16, 15, 4) give TaikoNation's 1385 inputs.
+Changing them needs no re-extraction.
+"""
 from __future__ import annotations
 
 import bisect
@@ -7,52 +17,69 @@ import numpy as np
 import torch
 from torch.utils.data import Dataset, Sampler
 
-from donderformer.data.splits import read_split
+from donderformer.data.features import FeatureExtractor
+from donderformer.data.splits import read_manifest
 from donderformer.paths import DataPaths
 
 
 class TaikoDataset(Dataset):
-    """Windows from ``processed/<run_name>/normalized/<song_id>/windows.npz``.
+    def __init__(self, paths: DataPaths, split: str, extractor: FeatureExtractor, part: str = "train",
+                 audio_frames: int = 16, history_frames: int = 15, target_frames: int = 4):
+        self.paths, self.split, self.extractor, self.part = paths, split, extractor, part
+        self.audio_frames, self.history_frames, self.target_frames = audio_frames, history_frames, target_frames
 
-    Songs are loaded one at a time rather than concatenated into RAM; pair it
-    with ``SongBatchSampler`` so batches don't reopen large npz files.
-    """
+        self.charts = read_manifest(paths, split, part)
+        self.chart_ids = [row["chart_id"] for row in self.charts]
+        self.mean, self.std = extractor.load_normalization(paths, split)
 
-    def __init__(self, paths: DataPaths, run_name: str, split: str = "train"):
-        self.run_dir = paths.processed(run_name)
-        self.window_dir = self.run_dir / "normalized"
-        # The run's own manifest snapshot, not splits/manifest.csv, so a run
-        # always loads the songs it was preprocessed (and normalized) with.
-        self.split = read_split(self.run_dir / "manifest.csv")
-        self.song_ids = self.split[split]
         self.lengths = []
-        for song_id in self.song_ids:
-            with np.load(self.window_dir / song_id / "windows.npz") as d:
-                self.lengths.append(len(d["X"]))
+        for row in self.charts:
+            n_frames = len(np.load(extractor.mel_path(paths, row["audio_id"]), mmap_mode="r"))
+            self.lengths.append(max(n_frames - (target_frames - 1), 0))
         self.ends = np.cumsum(self.lengths).tolist()
-        self._cached_song = None
+        self._cached_chart = None
         self._cached_arrays = None
 
     def __len__(self):
         return self.ends[-1] if self.ends else 0
 
     def __getitem__(self, index):
-        song_index = bisect.bisect_right(self.ends, index)
-        local_index = index - (self.ends[song_index - 1] if song_index else 0)
-        if self._cached_song != song_index:
-            self._cached_arrays = self.load_song(self.song_ids[song_index])
-            self._cached_song = song_index
-        X, Y = self._cached_arrays
-        return torch.from_numpy(X[local_index]), torch.from_numpy(Y[local_index])
+        chart_index = bisect.bisect_right(self.ends, index)
+        local_index = index - (self.ends[chart_index - 1] if chart_index else 0)
+        if self._cached_chart != chart_index:
+            self._cached_arrays = self.chart_arrays(chart_index)
+            self._cached_chart = chart_index
+        X, Y = self._window(*self._cached_arrays, np.array([local_index]))
+        return torch.from_numpy(X[0]), torch.from_numpy(Y[0])
 
-    def load_song(self, song_id: str):
-        """All windows of one song as float32 ``(X, Y)``."""
-        with np.load(self.window_dir / song_id / "windows.npz") as d:
-            return d["X"].astype(np.float32), d["Y"].astype(np.float32)
+    def chart_arrays(self, chart_index):
+        """Normalized mel and labels of one chart, zero-padded at the front for windowing."""
+        row = self.charts[chart_index]
+        mel = np.load(self.extractor.mel_path(self.paths, row["audio_id"]))
+        labels = np.load(self.extractor.labels_path(self.paths, row["audio_id"], row["chart_id"]))
+        mel = ((mel - self.mean) / (self.std + 1e-8)).astype(np.float32)
+        pad = max(self.audio_frames - 1, self.history_frames)
+        mel = np.vstack([np.zeros((pad, mel.shape[1]), np.float32), mel])
+        labels = np.vstack([np.zeros((pad, 7), np.float32), labels.astype(np.float32)])
+        return mel, labels, pad
+
+    def _window(self, mel, labels, pad, frames):
+        A, H, T = self.audio_frames, self.history_frames, self.target_frames
+        i = frames[:, None] + pad
+        audio = mel[i - A + 1 + np.arange(A)]
+        history = labels[i - H + np.arange(H)]
+        targets = labels[i + np.arange(T)]
+        X = np.concatenate([audio.reshape(len(frames), -1), history.reshape(len(frames), -1)], axis=1)
+        return X, targets
+
+    def chart_windows(self, chart_id):
+        """Every window of one chart as float32 ``(X, Y)``, e.g. for evaluating a whole song."""
+        chart_index = self.chart_ids.index(chart_id)
+        return self._window(*self.chart_arrays(chart_index), np.arange(self.lengths[chart_index]))
 
 
 class SongBatchSampler(Sampler):
-    """Batches never cross song boundaries; songs (and windows) can be shuffled."""
+    """Batches never cross chart boundaries; charts (and windows) can be shuffled."""
 
     def __init__(self, dataset: TaikoDataset, batch_size: int, shuffle: bool = False):
         self.dataset, self.batch_size, self.shuffle = dataset, batch_size, shuffle

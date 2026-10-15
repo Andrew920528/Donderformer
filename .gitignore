@@ -20,9 +20,9 @@ env/
 .idea/
 
 # Data: raw audio/charts and preprocessing output move with rsync, never git.
-# data/splits/ (manifest + split.json) is committed so splits are reproducible.
+# data/splits/ is committed so splits are reproducible.
 data/raw/
-data/processed/
+data/features/
 
 # Checkpoints and generated charts
 outputs/
@@ -32,7 +32,7 @@ outputs/
 playground/*
 !playground/README.md
 !playground/toy_dataset/
-playground/toy_dataset/processed/
+playground/toy_dataset/features/
 
 # Logs / temporary files
 *.log

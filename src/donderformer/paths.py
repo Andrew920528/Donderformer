@@ -8,9 +8,9 @@ The data root is chosen in this order:
 Every data root has the same layout, so the toy dataset is just another root::
 
     data/
-    ├── raw/                 # ESE song folders (genre/song/*.tja, audio)
-    ├── splits/              # manifest.csv (charts + split), scan_report.json (committed)
-    └── processed/<run>/     # preprocessing output + a manifest.csv snapshot of its charts
+    ├── raw/                     # ESE song folders (genre/song/*.tja, audio)
+    ├── splits/<split>/          # DataSplitter output (committed)
+    └── features/<extractor>/    # FeatureExtractor cache (gitignored)
 """
 from __future__ import annotations
 
@@ -43,20 +43,15 @@ class DataPaths:
     def splits(self) -> Path:
         return self.root / "splits"
 
-    @property
-    def manifest(self) -> Path:
-        return self.splits / "manifest.csv"
+    def split_dir(self, name: str) -> Path:
+        return self.splits / name
 
     @property
-    def scan_report(self) -> Path:
-        return self.splits / "scan_report.json"
+    def features(self) -> Path:
+        return self.root / "features"
 
-    def processed(self, run_name: str) -> Path:
-        return self.root / "processed" / run_name
-
-    def raw_path(self, relative: str | os.PathLike) -> Path:
-        """Resolve a manifest path (stored relative to ``raw/``)."""
-        return self.raw / relative
+    def feature_dir(self, extractor_id: str) -> Path:
+        return self.features / extractor_id
 
 
 def outputs_dir() -> Path:

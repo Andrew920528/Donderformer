@@ -1,3 +1,0 @@
-title,tja,audio,bpm,offset,oni_sections,playable_notes,has_measure,count_1,count_2,count_3,count_4,count_A,count_B,count_5,count_6,count_7,count_8,count_9,status,reason,song_id,split
-Idol,Idol/Idol.tja,Idol/Idol.ogg,166.0,-0.524,1,550,False,266,230,25,19,0,0,4,0,6,10,0,accepted,,idol_9132a1,test
-YES or YES,yes_or_yes/YES or YES.tja,yes_or_yes/YES or YES.ogg,138.0,-1.815,1,413,False,242,152,15,0,0,0,3,0,1,4,0,accepted,,yes_or_yes_04141b,train
