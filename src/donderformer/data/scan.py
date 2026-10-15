@@ -313,7 +313,11 @@ def scan_chart(tja, raw_dir):
 
 def scan_dataset(paths: DataPaths):
     """Scan every TJA under ``paths.raw`` and write ``splits/manifest_strict.csv``."""
-    rows = [scan_chart(tja, paths.raw) for tja in sorted(paths.raw.rglob("*.tja"))]
+    tjas = sorted(paths.raw.rglob("*.tja"))
+    if not tjas:
+        # Guard: an empty scan would overwrite the committed manifest and split.
+        raise FileNotFoundError(f"No .tja files under {paths.raw}. Wrong data root?")
+    rows = [scan_chart(tja, paths.raw) for tja in tjas]
 
     paths.splits.mkdir(parents=True, exist_ok=True)
     with open(paths.splits / "manifest_strict.csv", "w", newline="", encoding="utf-8") as f:
