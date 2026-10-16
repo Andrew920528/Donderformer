@@ -21,7 +21,6 @@ env/
 input/ESE/
 playground/input/
 playground/processed_*/
-*.pt
 
 # Logs / temporary files
 *.log
