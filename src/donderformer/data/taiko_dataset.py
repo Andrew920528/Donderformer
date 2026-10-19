@@ -28,7 +28,12 @@ class TaikoDataset(Dataset):
         self.paths, self.split, self.extractor, self.part = paths, split, extractor, part
         self.audio_frames, self.history_frames, self.target_frames = audio_frames, history_frames, target_frames
 
-        self.charts = read_manifest(paths, split, part)
+        rows = read_manifest(paths, split, part)
+        failed = extractor.failed_charts(paths, split)
+        self.charts = [row for row in rows if row["chart_id"] not in failed]
+        self.skipped = len(rows) - len(self.charts)
+        if self.skipped:
+            print(f"{part}: skipping {self.skipped} charts that couldn't be labelled")
         self.chart_ids = [row["chart_id"] for row in self.charts]
         self.mean, self.std = extractor.load_normalization(paths, split)
 

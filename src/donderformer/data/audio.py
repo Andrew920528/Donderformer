@@ -5,6 +5,7 @@ Spectrum and MelBands, checked against essentia==2.1b6 to about 1e-4.
 """
 from __future__ import annotations
 
+import shutil
 import subprocess
 from functools import lru_cache
 
@@ -16,9 +17,22 @@ MEL_LO, MEL_HI = 27.5, 16000.0
 LOG_EPS = 1e-16
 
 
+@lru_cache(maxsize=1)
+def ffmpeg_exe():
+    """System ffmpeg if installed, else the binary bundled with imageio-ffmpeg (PACE has no ffmpeg)."""
+    exe = shutil.which("ffmpeg")
+    if exe:
+        return exe
+    try:
+        import imageio_ffmpeg
+    except ImportError:
+        raise RuntimeError("ffmpeg not found; install it or `uv add imageio-ffmpeg`") from None
+    return imageio_ffmpeg.get_ffmpeg_exe()
+
+
 def load_mono_audio(path, sr=SR):
     result = subprocess.run(
-        ["ffmpeg", "-v", "error", "-i", str(path), "-ac", "1", "-ar", str(sr), "-f", "f32le", "-"],
+        [ffmpeg_exe(), "-v", "error", "-i", str(path), "-ac", "1", "-ar", str(sr), "-f", "f32le", "-"],
         capture_output=True, check=True,
     )
     return np.frombuffer(result.stdout, dtype=np.float32)

@@ -6,7 +6,7 @@
     │   ├── mel.npy                    # (n_frames, n_mels) log-mel, shared by every chart of the song
     │   └── labels/<chart_id>.npy      # (n_frames, 7) one-hot
     ├── normalization/<split>.npz      # per-band mean/std from that split's train songs + manifest hash
-    └── failures/<split>.json          # charts that couldn't be labelled, if any
+    └── failures/<split>.json          # charts that couldn't be labelled, if any (skipped by TaikoDataset)
 
 Extraction is deterministic and only computes missing files, so splits share the cache.
 """
@@ -110,11 +110,16 @@ class FeatureExtractor:
         summary = {"charts": len(rows), "computed": computed, "failures": len(failures)}
         print(f"{self.id} / {split}: {summary}")
         if failures:
-            raise RuntimeError(
-                f"{len(failures)} charts couldn't be labelled; see {failure_path}. "
-                "Everything else is cached."
-            )
+            print(f"{len(failures)} charts couldn't be labelled and will be skipped by TaikoDataset; "
+                  f"see {failure_path}")
         return summary
+
+    def failed_charts(self, paths, split) -> set[str]:
+        """chart_ids that extract() couldn't label, e.g. notes scheduled after the audio ends."""
+        path = self.dir(paths) / "failures" / f"{split}.json"
+        if not path.exists():
+            return set()
+        return {f["chart_id"] for f in json.loads(path.read_text())}
 
     def chart_labels(self, paths, row, n_frames):
         text = (paths.raw / row["tja"]).read_text(encoding="utf-8-sig")
