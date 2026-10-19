@@ -8,6 +8,9 @@ A study of Transformers for Taiko no Tatsujin chart generation, with a CNN-LSTM 
 Donderformer/
 ├── src/donderformer/        # importable logic
 │   ├── paths.py             # DataPaths: where data lives
+│   ├── training.py          # train_epoch / evaluate loops
+│   ├── models/
+│   │   └── taikonation.py   # TaikoNationBaseline (CNN-LSTM)
 │   └── data/
 │       ├── tja.py           # TJA parsing and validation
 │       ├── audio.py         # log-mel features, frame labels
@@ -17,7 +20,8 @@ Donderformer/
 ├── notebooks/               # one notebook per process
 │   ├── 01_make_split.ipynb
 │   ├── 02_extract_features.ipynb
-│   └── 03_train_lstm.ipynb
+│   ├── 03_train_lstm.ipynb
+│   └── reference/           # earlier notebooks kept as-is for comparison
 ├── data/                    # see data/README.md; only data/splits/ is committed
 ├── outputs/                 # checkpoints and generated charts (gitignored)
 └── playground/              # scratch (gitignored) + toy_dataset/ (committed)
@@ -56,7 +60,7 @@ mkdir -p "$REPO/data/raw" && mv "$ESE"/* "$REPO/data/raw/" && rmdir "$ESE"
 
 1. **`01_make_split.ipynb`** uses a `DataSplitter` (courses, genres, BPM and level ranges, ratios, seed) to pick charts and split them by audio file. It writes `splits/<name>/` with `config.json`, `manifest.csv` and a `report.json` of what was kept, what was lost and why, plus distributions. Splits are never edited in place; a new filter means a new name. `data/splits/oni_v1` is the Oni split used so far.
 2. **`02_extract_features.ipynb`** uses a `FeatureExtractor` (frame length) to cache log-mel per audio file and labels per chart under `features/<extractor.id>/`, then fits that split's normalization on its train songs. Cached songs are skipped, so new splits are cheap.
-3. **`03_train_lstm.ipynb`** loads `TaikoDataset(paths, split, extractor, part, audio_frames, history_frames, target_frames)`, which cuts windows on the fly, then trains and evaluates the CNN-LSTM baseline and saves the checkpoint to `outputs/checkpoints/`.
+3. **`03_train_lstm.ipynb`** loads `TaikoDataset(paths, split, extractor, part, audio_frames, history_frames, target_frames)`, which cuts windows on the fly, then trains the CNN-LSTM baseline (stage 1, then a lower-learning-rate fine-tune) and saves the checkpoint to `outputs/checkpoints/`. The same notebook then evaluates on the test charts, both teacher-forced (the model sees the human chart's previous notes) and autoregressive (it sees only its own generated notes, as it would on a new song), and writes metrics, generated charts and plots to `outputs/eval/<run_name>/`. Results of the full-data PACE run are in [docs/results.md](docs/results.md).
 
 Feature caches and checkpoints move between PACE and a laptop with rsync, never git:
 
@@ -114,3 +118,7 @@ A prediction is counted as correct only when:
 2. The generated note type matches the ground-truth note type.
 
 Precision, recall, and F1 score are reported for both evaluations.
+
+### Autoregressive evaluation
+
+Teacher-forced scores are optimistic, because the model's note-history input comes from the human chart. `generate_autoregressive` in `03_train_lstm.ipynb` keeps only the audio part of each window and feeds back the model's own last 15 sampled notes, one 23 ms step at a time. Each test chart is scored raw and "clean" (back-to-back notes removed) with the F1 metrics above plus TaikoNation's DCHuman, OCHuman, Over-PSpace and HI-PSpace.
