@@ -26,6 +26,7 @@ from pathlib import Path
 import numpy as np
 
 from donderformer.data.data_splitter import read_manifest
+from donderformer.data.tja import course_sections
 from donderformer.data.tja_export import write_tja
 from donderformer.paths import DataPaths, outputs_dir
 
@@ -78,6 +79,14 @@ class ChartExporter:
             rows = rows[:self.n_songs]
         return rows
 
+    def level(self, row) -> int | None:
+        """Star level from the manifest, else from the chart's own TJA (oni_v1 has no level column)."""
+        if row.get("level"):
+            return int(float(row["level"]))
+        text = (self.paths.raw / row["tja"]).read_text(encoding="utf-8-sig")
+        levels = [s.level for s in course_sections(text) if s.course == row["course"]]
+        return levels[0] if len(levels) == 1 else None
+
     def export(self) -> Path:
         """Write a new ``outputs/exports/<datetime>-<alias>/`` folder; returns its path."""
         out = outputs_dir() / "exports" / f"{datetime.now():%Y%m%d_%H%M%S}-{self.alias}"
@@ -104,7 +113,7 @@ class ChartExporter:
                 with np.load(folder / f"{row['chart_id']}.npz") as data:
                     charts["human"] = (data["human"], folder)
 
-            level = int(float(row["level"])) if row.get("level") else None
+            level = self.level(row)
             files = {}
             for label, (classes, folder) in charts.items():
                 tja = song_dir / f"{name} ({label}).tja"
