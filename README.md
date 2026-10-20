@@ -10,6 +10,7 @@ Donderformer/
 │   ├── paths.py             # DataPaths: where data lives
 │   ├── training.py          # train_epoch / evaluate loops
 │   ├── runs.py              # one output folder per training run
+│   ├── exporter.py          # ChartExporter: song folders for a TJA simulator
 │   ├── models/
 │   │   └── taikonation.py   # TaikoNationBaseline (CNN-LSTM)
 │   └── data/
@@ -26,7 +27,7 @@ Donderformer/
 │   ├── 04_train_transformer.ipynb   # (empty for now)
 │   ├── 05_generate_songs.ipynb      # (empty for now)
 │   ├── 06_evaluation.ipynb          # (empty for now)
-│   ├── 07_exports.ipynb     # a run's generated charts as simulator-ready song folders
+│   ├── 07_exports.ipynb     # generated charts as simulator-ready song folders
 │   └── reference/           # earlier notebooks kept as-is for comparison
 ├── data/                    # see data/README.md; only data/splits/ is committed
 ├── outputs/                 # checkpoints and generated charts (gitignored)
@@ -68,7 +69,7 @@ mkdir -p "$REPO/data/raw" && mv "$ESE"/* "$REPO/data/raw/" && rmdir "$ESE"
 2. **`02_extract_features.ipynb`** uses a `FeatureExtractor` (frame length) to cache log-mel per audio file and labels per chart under `features/<extractor.id>/`, then fits that split's normalization on its train songs. Cached songs are skipped, so new splits are cheap.
 3. **`03_train_lstm.ipynb`** loads `TaikoDataset(paths, split, extractor, part, audio_frames, history_frames, target_frames)`, which cuts windows on the fly, then trains the CNN-LSTM baseline (stage 1, then a lower-learning-rate fine-tune) and saves it to a new run folder (see below). The same notebook then evaluates on the test charts, both teacher-forced (the model sees the human chart's previous notes) and autoregressive (it sees only its own generated notes, as it would on a new song), and writes metrics, generated charts and plots to that run's `eval/` folder. Results of the full-data PACE run are in [docs/results.md](docs/results.md).
 4. **`04_train_transformer`, `05_generate_songs`, `06_evaluation`** are placeholders for now.
-5. **`07_exports.ipynb`** turns a run's generated test charts into `<run>/exports/<song title>/` folders, each with the song's audio and a `.tja` (`donderformer.data.tja_export.write_tja`) on its own BPM and OFFSET. Upload the whole `exports/` folder to a TJA player such as OpenTaiko to play them.
+5. **`07_exports.ipynb`** uses a `ChartExporter` (`src/donderformer/exporter.py`) to package generated charts from one or more runs as `outputs/exports/<datetime>-<alias>/<song>/` folders: one copy of the audio plus one `.tja` per source (e.g. `Idol (lstm).tja`, `Idol (transformer).tja`, `Idol (human).tja`), so models can be compared song by song in a TJA simulator. Filter with `songs` (exact titles) or `n_songs`; `export.json` records where every chart came from.
 
 ### Training runs
 
@@ -78,8 +79,7 @@ Every run of `03_train_lstm.ipynb` gets its own folder, so runs never overwrite 
 outputs/runs/<model>/<YYYYMMDD_HHMMSS>[-<alias>]-<split>-<extractor>/
 ├── config.json   # split, extractor, window sizes, hyperparameters, git commit, user, host
 ├── model.pt      # model_state_dict + losses + config
-├── eval/         # metrics, generated charts and plots
-└── exports/      # simulator-ready song folders, made by 07_exports
+└── eval/         # metrics, generated charts and plots
 ```
 
 Set `ALIAS` in the config cell to label a run (letters, digits, `_` and `.`), e.g. `20261020_194245-bs1_finetune-oni_v1-frame23ms`. To evaluate an earlier run, point `RUN_DIR` at its folder in the cell after "Make predictions on the test song" and call `load_run`. `outputs/` is `<repo>/outputs` (gitignored) unless `DONDER_OUTPUTS` is set. The pre-refactor PACE model lives in `outputs/runs/taikonation/20261015_203543-pace_legacy-oni_v1-frame23ms/` on machines that have copied it.
