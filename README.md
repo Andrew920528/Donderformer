@@ -9,6 +9,7 @@ Donderformer/
 ├── src/donderformer/        # importable logic
 │   ├── paths.py             # DataPaths: where data lives
 │   ├── training.py          # train_epoch / evaluate loops
+│   ├── runs.py              # one output folder per training run
 │   ├── models/
 │   │   └── taikonation.py   # TaikoNationBaseline (CNN-LSTM)
 │   └── data/
@@ -60,9 +61,22 @@ mkdir -p "$REPO/data/raw" && mv "$ESE"/* "$REPO/data/raw/" && rmdir "$ESE"
 
 1. **`01_make_split.ipynb`** uses a `DataSplitter` (courses, genres, BPM and level ranges, ratios, seed) to pick charts and split them by audio file. It writes `splits/<name>/` with `config.json`, `manifest.csv` and a `report.json` of what was kept, what was lost and why, plus distributions. Splits are never edited in place; a new filter means a new name. `data/splits/oni_v1` is the Oni split used so far.
 2. **`02_extract_features.ipynb`** uses a `FeatureExtractor` (frame length) to cache log-mel per audio file and labels per chart under `features/<extractor.id>/`, then fits that split's normalization on its train songs. Cached songs are skipped, so new splits are cheap.
-3. **`03_train_lstm.ipynb`** loads `TaikoDataset(paths, split, extractor, part, audio_frames, history_frames, target_frames)`, which cuts windows on the fly, then trains the CNN-LSTM baseline (stage 1, then a lower-learning-rate fine-tune) and saves the checkpoint to `outputs/checkpoints/`. The same notebook then evaluates on the test charts, both teacher-forced (the model sees the human chart's previous notes) and autoregressive (it sees only its own generated notes, as it would on a new song), and writes metrics, generated charts and plots to `outputs/eval/<run_name>/`. Results of the full-data PACE run are in [docs/results.md](docs/results.md).
+3. **`03_train_lstm.ipynb`** loads `TaikoDataset(paths, split, extractor, part, audio_frames, history_frames, target_frames)`, which cuts windows on the fly, then trains the CNN-LSTM baseline (stage 1, then a lower-learning-rate fine-tune) and saves it to a new run folder (see below). The same notebook then evaluates on the test charts, both teacher-forced (the model sees the human chart's previous notes) and autoregressive (it sees only its own generated notes, as it would on a new song), and writes metrics, generated charts and plots to that run's `eval/` folder. Results of the full-data PACE run are in [docs/results.md](docs/results.md).
 
-Feature caches and checkpoints move between PACE and a laptop with rsync, never git:
+### Training runs
+
+Every run of `03_train_lstm.ipynb` gets its own folder, so runs never overwrite each other:
+
+```text
+outputs/runs/<model>/<YYYYMMDD_HHMMSS>[-<alias>]-<split>-<extractor>/
+├── config.json   # split, extractor, window sizes, hyperparameters, git commit, user, host
+├── model.pt      # model_state_dict + losses + config
+└── eval/         # metrics, generated charts and plots
+```
+
+Set `ALIAS` in the config cell to label a run (letters, digits, `_` and `.`), e.g. `20261020_194245-bs1_finetune-oni_v1-frame23ms`. To evaluate an earlier run, point `RUN_DIR` at its folder in the cell after "Make predictions on the test song" and call `load_run`. `outputs/` is `<repo>/outputs` (gitignored) unless `DONDER_OUTPUTS` is set. The pre-refactor PACE model lives in `outputs/runs/taikonation/20261015_203543-pace_legacy-oni_v1-frame23ms/` on machines that have copied it.
+
+Feature caches and runs move between PACE and a laptop with rsync, never git:
 
 ```bash
 rsync -avzP yhsu72@login-ice.pace.gatech.edu:~/scratch/Taiko_DL/Donderformer/data/features/frame23ms/ /Users/xuyanshuo/projects/Taiko_DL/Donderformer/data/features/frame23ms/
