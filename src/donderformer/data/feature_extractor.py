@@ -137,8 +137,20 @@ class FeatureExtractor:
         train_audio = sorted({r["audio_id"] for r in rows if r["split"] == "train"})
         if not train_audio:
             raise ValueError("split has no train charts to fit normalization on")
-        frames = np.concatenate([np.load(self.mel_path(paths, a)) for a in train_audio], axis=0)
-        return frames.mean(axis=0), np.maximum(frames.std(axis=0), 1e-8)
+        # Streamed one song at a time (Chan et al. parallel variance in float64); concatenating the
+        # full train set needs several GB and can get the kernel killed.
+        count, mean, m2 = 0, np.zeros(self.n_mels), np.zeros(self.n_mels)
+        for audio_id in train_audio:
+            mel = np.load(self.mel_path(paths, audio_id)).astype(np.float64)
+            n, song_mean = len(mel), mel.mean(axis=0)
+            song_m2 = ((mel - song_mean) ** 2).sum(axis=0)
+            delta = song_mean - mean
+            total = count + n
+            mean = mean + delta * n / total
+            m2 = m2 + song_m2 + delta ** 2 * count * n / total
+            count = total
+        std = np.sqrt(m2 / count)
+        return mean.astype(np.float32), np.maximum(std, 1e-8).astype(np.float32)
 
     def load_normalization(self, paths, split):
         path = self.normalization_path(paths, split)
