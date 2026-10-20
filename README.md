@@ -79,7 +79,11 @@ Every run of `03_train_lstm.ipynb` gets its own folder, so runs never overwrite 
 outputs/runs/<model>/<YYYYMMDD_HHMMSS>[-<alias>]-<split>-<extractor>/
 ├── config.json   # split, extractor, window sizes, hyperparameters, git commit, user, host
 ├── model.pt      # model_state_dict + losses + config
-└── eval/         # metrics, generated charts and plots
+└── eval/
+    ├── teacher_forced/   # results.json, ochuman.npz
+    ├── ar_test/          # summary.csv (means), results.json (per song)
+    │   └── charts/       # <chart_id>.npz generated sequences (human, generated, clean)
+    └── plots/            # *.png
 ```
 
 Set `ALIAS` in the config cell to label a run (letters, digits, `_` and `.`), e.g. `20261020_194245-bs1_finetune-oni_v1-frame23ms`. To evaluate an earlier run, point `RUN_DIR` at its folder in the cell after "Make predictions on the test song" and call `load_run`. `outputs/` is `<repo>/outputs` (gitignored) unless `DONDER_OUTPUTS` is set. The pre-refactor PACE model lives in `outputs/runs/taikonation/20261015_203543-pace_legacy-oni_v1-frame23ms/` on machines that have copied it.

@@ -1,7 +1,7 @@
 """ChartExporter: package generated charts as song folders a TJA simulator can load.
 
 Each source is a folder of ``<chart_id>.npz`` files as ``03_train_lstm`` writes them to
-``<run>/eval/ar_test/`` (arrays ``generated``, ``clean`` and ``human``). Songs every source has
+``<run>/eval/ar_test/charts/`` (arrays ``generated``, ``clean`` and ``human``). Songs every source has
 are exported side by side, one ``.tja`` per source next to a single copy of the audio::
 
     outputs/exports/<YYYYMMDD_HHMMSS>-<alias>/
@@ -42,7 +42,7 @@ def folder_name(title: str) -> str:
 @dataclass
 class ChartExporter:
     alias: str                          # names the export folder, e.g. "lstm_vs_transformer"
-    sources: dict[str, Path]            # label -> folder of <chart_id>.npz, e.g. {"lstm": run / "eval" / "ar_test"}
+    sources: dict[str, Path]            # label -> folder of <chart_id>.npz, e.g. {"lstm": run / "eval" / "ar_test" / "charts"}
     paths: DataPaths                    # data root holding the split manifest and the raw audio
     split: str                          # split the charts were generated from, e.g. "oni_v1"
     version: str = "clean"              # "clean" (back-to-back notes removed) or "raw"
