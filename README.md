@@ -178,5 +178,6 @@ Overall P-Space ratios, sparse star-group merging (minimum 30 training charts),
 and one pre-declared retention test. Secondary p-values are Holm-corrected. Random
 density is excluded from comparison summaries. Existing coverage/normalization
 keys remain in per-chart JSON; legacy eight-frame paper metrics are unchanged.
-The real manifest grouping/count report is in `outputs/analysis/oni_v1/`; cache
-failure exclusions will be applied when matching feature caches are restored.
+The saved-run workflow passed on all 178 `oni_v1` test charts using shared LSTM
+weights. See [full-run validation and results](docs/evaluation_full_run.md) for
+usable group counts, metrics, runtime, and remaining Transformer comparisons.

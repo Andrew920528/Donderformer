@@ -43,18 +43,20 @@ Using the current committed manifest and linked raw TJA metadata, the mapping is
 |---|---:|---:|
 | 1–4 | 71 | 11 |
 | 5 | 113 | 7 |
-| 6 | 236 | 25 |
+| 6 | 235 | 25 |
 | 7 | 378 | 43 |
 | 8 | 360 | 54 |
 | 9 | 171 | 22 |
 | 10 | 82 | 16 |
-| Total | 1411 | 178 |
+| Total | 1410 | 178 |
 
-The metadata-only report is at `outputs/analysis/oni_v1/`. These counts include all
-manifest train/test rows because the full cache and matching extractor failure
-list are absent. Actual scoring excludes recorded failures before choosing groups
-and reports the resulting usable counts; this may change counts/mapping. No split
-or features were generated to produce this report.
+These are usable cached-label counts from the successful 178-chart evaluation.
+The manifest contains 1,411 training charts; one failed labelling and is recorded
+in `features/frame23ms/failures/oni_v1.json`. Its exclusion reduces the six-star
+training count from 236 to 235 without changing the merged mapping. The original
+metadata-only report at `outputs/analysis/oni_v1/` includes that manifest row.
+See [full-run validation](evaluation_full_run.md) for checkpoint provenance,
+cache preparation, results, and runtime.
 
 ## Definitions
 
@@ -187,8 +189,10 @@ count only at their start. In the synthetic example
 `human=[0,5,5,5,0,2,0,0]`, `generated=[0,5,0,0,0,2,0,0]`, both onset and joint F1
 change from **2/3 to 1**. The legacy paper scores are unchanged. Historical F1
 numbers in `docs/results.md` must be recomputed from saved charts before comparison.
-No real saved chart/run folders are available in this checkout, so real-run
-before/after numbers cannot yet be reported.
+A real shared-checkpoint evaluation is now available; see
+[full-run results](evaluation_full_run.md). Historical checkpoints/results may
+differ, so these new scores are not a controlled before/after comparison with
+the older frame-counted results.
 
 ## Comparison and inference limits
 
@@ -256,7 +260,10 @@ Run `../env/bin/python -m unittest discover -s tests -v` from this PACE checkout
 (or the equivalent project interpreter elsewhere). Tests include required metric
 sanity cases, held-note counting, train/test reference separation, raw/clean NPZ
 compatibility, exact random counts and seed means, chart-ID pairing, signed-rank
-ties/zeros, both notebook workflows and exporter packaging. Full-data metrics,
-real difficulty bands/random controls, memory/runtime on the full cache, and
-LSTM-versus-Transformer significance still require the missing label/feature
-caches and model-generated chart artifacts (plus a checkpoint for inference).
+ties/zeros, both notebook workflows and exporter packaging. Fresh-process notebooks 02,
+06, and 07 passed with the shared LSTM checkpoint on all 178 test charts,
+including full training/test references, difficulty bands, random controls,
+and memory/runtime measurements. The LSTM-versus-Transformer primary test and
+secondary comparisons still await compatible Transformer results. Original
+training normalization was not supplied, so its reconstructed training-only
+statistics cannot be compared byte-for-byte with the training machine’s copy.
