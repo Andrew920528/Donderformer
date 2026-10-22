@@ -1,180 +1,100 @@
-# DonderFormer Data Preprocessing and Baseline
+# DonderFormer
 
-This directory contains the data preprocessing pipeline and CNN-LSTM baseline for the DonderFormer project.
+A study of Transformers for Taiko no Tatsujin chart generation, with a CNN-LSTM baseline reproduced from TaikoNation.
 
-Because the ESE dataset is large, the raw dataset is not stored in this repository. Dataset scanning and preprocessing can be run on Georgia Tech PACE, and the generated processed data can then be downloaded and used locally for model training.
+## Layout
+
+```text
+Donderformer/
+├── src/donderformer/        # importable logic
+│   ├── paths.py             # DataPaths: where data lives
+│   ├── training.py          # train_epoch / evaluate loops
+│   ├── runs.py              # one output folder per training run
+│   ├── exporter.py          # ChartExporter: song folders for a TJA simulator
+│   ├── models/
+│   │   └── taikonation.py   # TaikoNationBaseline (CNN-LSTM)
+│   └── data/
+│       ├── tja.py           # TJA parsing and validation
+│       ├── tja_export.py    # model output (per-frame classes) -> playable .tja
+│       ├── audio.py         # log-mel features, frame labels
+│       ├── data_splitter.py      # DataSplitter: scan, filter, split, report
+│       ├── feature_extractor.py  # FeatureExtractor
+│       └── taiko_dataset.py      # TaikoDataset, SongBatchSampler
+├── notebooks/               # one notebook per process
+│   ├── 01_make_split.ipynb
+│   ├── 02_extract_features.ipynb
+│   ├── 03_train_lstm.ipynb
+│   ├── 04_train_transformer.ipynb   # (empty for now)
+│   ├── 05_generate_songs.ipynb      # (empty for now)
+│   ├── 06_evaluation.ipynb          # (empty for now)
+│   ├── 07_exports.ipynb     # generated charts as simulator-ready song folders
+│   └── reference/           # earlier notebooks kept as-is for comparison
+├── data/                    # see data/README.md; only data/splits/ is committed
+├── outputs/                 # checkpoints and generated charts (gitignored)
+└── playground/              # scratch (gitignored) + toy_dataset/ (committed)
+```
+
+## Setup
+
+The environment is managed with [uv](https://docs.astral.sh/uv/):
+
+```bash
+cd /path/to/Donderformer
+uv sync
+```
+
+This creates `.venv/` with the pinned dependencies (`uv.lock`) and installs `donderformer` in editable mode, so `import donderformer` works everywhere. Run things through it with `uv run`, e.g. `uv run jupyter lab`, or pick the `.venv` interpreter as the notebook kernel in VS Code.
+
+## Where the data lives
+
+`DataPaths()` uses the `DONDER_DATA` environment variable if set, otherwise `<repo>/data`. Every data root has the same layout (`raw/`, `splits/`, `features/`), so switching datasets is one line:
+
+```python
+from donderformer.paths import DataPaths
+paths = DataPaths()         # full dataset
+paths = DataPaths.toy()     # playground/toy_dataset, for checking that a notebook runs
+```
+
+The full ESE dataset only lives on PACE. Put the genre folders directly in `data/raw/` (no extra `ESE/` level):
+
+```bash
+ESE=/path/to/your/ESE
+REPO=/path/to/Donderformer
+mkdir -p "$REPO/data/raw" && mv "$ESE"/* "$REPO/data/raw/" && rmdir "$ESE"
+```
 
 ## Pipeline
 
-```text
-ESE Dataset
-    ↓
-Dataset Scanning / Filtering
-    ↓
-Filtered Dataset Manifest
-    ↓
-Audio + TJA Preprocessing
-    ↓
-Model-Ready NumPy Files
-    ↓
-Download Processed Data to Local Machine
-    ↓
-CNN-LSTM Baseline Training and Evaluation
-```
+1. **`01_make_split.ipynb`** uses a `DataSplitter` (courses, genres, BPM and level ranges, ratios, seed) to pick charts and split them by audio file. It writes `splits/<name>/` with `config.json`, `manifest.csv` and a `report.json` of what was kept, what was lost and why, plus distributions. Splits are never edited in place; a new filter means a new name. `data/splits/oni_v1` is the Oni split used so far.
+2. **`02_extract_features.ipynb`** uses a `FeatureExtractor` (frame length) to cache log-mel per audio file and labels per chart under `features/<extractor.id>/`, then fits that split's normalization on its train songs. Cached songs are skipped, so new splits are cheap.
+3. **`03_train_lstm.ipynb`** loads `TaikoDataset(paths, split, extractor, part, audio_frames, history_frames, target_frames)`, which cuts windows on the fly, then trains the CNN-LSTM baseline (stage 1, then a lower-learning-rate fine-tune) and saves it to a new run folder (see below). The same notebook then evaluates on the test charts, both teacher-forced (the model sees the human chart's previous notes) and autoregressive (it sees only its own generated notes, as it would on a new song), and writes metrics, generated charts and plots to that run's `eval/` folder. Results of the full-data PACE run are in [docs/results.md](docs/results.md).
+4. **`04_train_transformer`, `05_generate_songs`, `06_evaluation`** are placeholders for now.
+5. **`07_exports.ipynb`** uses a `ChartExporter` (`src/donderformer/exporter.py`) to package generated charts from one or more runs as `outputs/exports/<datetime>-<alias>/<song>/` folders: one copy of the audio plus one `.tja` per source (e.g. `Idol (lstm).tja`, `Idol (transformer).tja`, `Idol (human).tja`), so models can be compared song by song in a TJA simulator. Filter with `songs` (exact titles) or `n_songs`; `export.json` records where every chart came from.
 
-## 1. Set Up the ESE Dataset on PACE
+### Training runs
 
-Place the extracted ESE dataset in your PACE storage.
-
-The dataset should contain the TJA chart files and their corresponding audio files.
-
-Example:
+Every run of `03_train_lstm.ipynb` gets its own folder, so runs never overwrite each other:
 
 ```text
-ESE/
-├── song_1/
-│   ├── song.tja
-│   └── song.ogg
-├── song_2/
-│   ├── song.tja
-│   └── song.ogg
-└── ...
+outputs/runs/<model>/<YYYYMMDD_HHMMSS>[-<alias>]-<split>-<extractor>/
+├── config.json   # split, extractor, window sizes, hyperparameters, git commit, user, host
+├── model.pt      # model_state_dict + losses + config
+└── eval/
+    ├── teacher_forced/   # results.json, ochuman.npz
+    ├── ar_test/          # summary.csv (means), results.json (per song)
+    │   └── charts/       # <chart_id>.npz generated sequences (human, generated, clean)
+    └── plots/            # *.png
 ```
 
-The raw ESE dataset is not included in this repository.
+Set `ALIAS` in the config cell to label a run (letters, digits, `_` and `.`), e.g. `20261020_194245-bs1_finetune-oni_v1-frame23ms`. To evaluate an earlier run, point `RUN_DIR` at its folder in the cell after "Make predictions on the test song" and call `load_run`. `outputs/` is `<repo>/outputs` (gitignored) unless `DONDER_OUTPUTS` is set. The pre-refactor PACE model lives in `outputs/runs/taikonation/20261015_203543-pace_legacy-oni_v1-frame23ms/` on machines that have copied it.
 
-## 2. Run the Dataset Scanner on PACE
-
-Clone the repository on PACE and navigate to the `playground` directory:
+Feature caches and runs move between PACE and a laptop with rsync, never git:
 
 ```bash
-cd <path-to-Donderformer>/playground
+rsync -avzP yhsu72@login-ice.pace.gatech.edu:~/scratch/Taiko_DL/Donderformer/data/features/frame23ms/ /Users/xuyanshuo/projects/Taiko_DL/Donderformer/data/features/frame23ms/
 ```
 
-Run the dataset scanner:
-
-```bash
-python scan_dataset.py
-```
-
-`scan_dataset.py` scans the ESE dataset and filters out charts that are not currently supported by our preprocessing pipeline.
-
-The scanner generates a manifest containing the charts that can be safely used for preprocessing.
-
-## 3. Run Preprocessing
-
-Open and run:
-
-```text
-new_preprocess.ipynb
-```
-
-The preprocessing pipeline:
-
-1. Loads the selected songs from the filtered manifest.
-2. Converts each audio file into 23 ms frames.
-3. Extracts 80-dimensional log-Mel features.
-4. Parses the corresponding TJA chart into timed note events.
-5. Aligns the chart labels with the 23 ms audio frames.
-6. Splits the songs into training, validation, and test sets.
-7. Computes per-Mel-band normalization statistics using only the training set.
-8. Applies the training-set normalization statistics to the training, validation, and test sets.
-9. Constructs model input and output windows.
-
-For each song, the model-ready data is stored in:
-
-```text
-windows.npz
-```
-
-Each `windows.npz` contains:
-
-```text
-X → Model input windows
-Y → Ground-truth target sequences
-```
-
-The expected shapes are:
-
-```text
-X: (number_of_windows, 1385)
-Y: (number_of_windows, 4, 7)
-```
-
-Each input window contains:
-
-```text
-16 audio frames × 80 Mel features = 1280
-15 previous note frames × 7 classes = 105
-
-1280 + 105 = 1385 input values
-```
-
-Each target contains:
-
-```text
-4 timesteps × 7 note classes
-```
-
-## 4. Download the Processed Data from PACE
-
-After preprocessing finishes, download the generated output directory from PACE to your local machine.
-
-Run the following from your **local terminal**:
-
-```bash
-scp -r <GT_USERNAME>@<PACE_HOST>:<remote-path>/processed_10 ./playground/
-```
-
-Replace:
-
-- `<GT_USERNAME>` with your Georgia Tech username.
-- `<PACE_HOST>` with the PACE login host.
-- `<remote-path>` with the location of the DonderFormer project on PACE.
-
-After downloading, the local directory should look similar to:
-
-```text
-playground/
-├── baseline_cnn_lstm.ipynb
-├── new_preprocess.ipynb
-├── scan_dataset.py
-└── processed_10/
-    ├── split.json
-    ├── normalization_stats.npz
-    └── normalized/
-        ├── <song_id>/
-        │   ├── features.npy
-        │   └── windows.npz
-        └── ...
-```
-
-## 5. Run the CNN-LSTM Baseline Locally
-
-Open:
-
-```text
-baseline_cnn_lstm.ipynb
-```
-
-The notebook loads the processed dataset using:
-
-```python
-OUTPUT_DIR = Path("processed_10")
-DATA_DIR = OUTPUT_DIR / "normalized"
-```
-
-The baseline notebook then:
-
-1. Loads the training, validation, and test splits.
-2. Trains the CNN-LSTM model.
-3. Runs the trained model on the test set.
-4. Produces probabilities for the seven note classes.
-5. Aggregates overlapping predictions from the sliding windows.
-6. Samples notes from the aggregated probability distributions.
-7. Evaluates the generated chart using onset and onset + note-type metrics.
-
-The raw ESE audio and TJA files are not required for this stage because the notebook uses the preprocessed NumPy files.
+With the default window sizes each sample has `X` of length 1385 and `Y` of shape `(4, 7)`.
 
 ## Model Input
 
@@ -225,28 +145,6 @@ A prediction is counted as correct only when:
 
 Precision, recall, and F1 score are reported for both evaluations.
 
-## Files Not Stored in Git
+### Autoregressive evaluation
 
-Large datasets, generated outputs, model checkpoints, and temporary system files should not be committed to Git.
-
-The `.gitignore` should include:
-
-```gitignore
-.DS_Store
-**/.DS_Store
-
-*.zip
-*.pt
-
-playground/input/
-playground/processed_*/
-
-__pycache__/
-*.py[cod]
-
-.ipynb_checkpoints/
-
-.venv/
-venv/
-env/
-```
+Teacher-forced scores are optimistic, because the model's note-history input comes from the human chart. `generate_autoregressive` in `03_train_lstm.ipynb` keeps only the audio part of each window and feeds back the model's own last 15 sampled notes, one 23 ms step at a time. Each test chart is scored raw and "clean" (back-to-back notes removed) with the F1 metrics above plus TaikoNation's DCHuman, OCHuman, Over-PSpace and HI-PSpace.

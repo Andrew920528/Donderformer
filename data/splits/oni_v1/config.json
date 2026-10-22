@@ -1,0 +1,15 @@
+{
+  "name": "oni_v1",
+  "courses": [
+    "oni"
+  ],
+  "genres": null,
+  "bpm_range": null,
+  "level_range": null,
+  "ratios": [
+    0.8,
+    0.1,
+    0.1
+  ],
+  "seed": 42
+}

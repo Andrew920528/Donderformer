@@ -6,6 +6,8 @@
 __pycache__/
 *.py[cod]
 *.pyo
+*.egg-info/
+build/
 .venv/
 venv/
 env/
@@ -17,10 +19,20 @@ env/
 .vscode/
 .idea/
 
-# Project data / generated outputs
-input/ESE/
-playground/input/
-playground/processed_*/
+# Data: raw audio/charts and preprocessing output move with rsync, never git.
+# data/splits/ is committed so splits are reproducible.
+data/raw/
+data/features/
+
+# Trained weights and inferences
+outputs/
+
+
+# Playground is scratch space; only its README and the toy dataset are tracked
+playground/*
+!playground/README.md
+!playground/toy_dataset/
+playground/toy_dataset/features/
 
 # Logs / temporary files
 *.log
