@@ -1,0 +1,18 @@
+{
+  "name": "oni_v2",
+  "courses": [
+    "oni"
+  ],
+  "genres": null,
+  "bpm_range": null,
+  "level_range": null,
+  "ratios": [
+    0.8,
+    0.1,
+    0.1
+  ],
+  "seed": 42,
+  "group_by": "song",
+  "stratify_by_level": true,
+  "song_parts_from": null
+}
