@@ -19,16 +19,19 @@ def note_counts(rows) -> list[int]:
     return [sum(int(r.get(f"count_{c}") or 0) for r in rows for c in codes) for codes in NOTE_TYPES.values()]
 
 
-def audio_durations(raw_dir: Path, audios, cache: Path, compute: bool = False) -> dict[str, float]:
-    """audio path (relative to ``raw_dir``) -> seconds. Decodes only files missing from ``cache``."""
+def audio_durations(raw_dir: Path, audios, cache: Path, compute: bool = False,
+                    save_every: int = 50) -> dict[str, float]:
+    """audio path (relative to ``raw_dir``) -> seconds. Decodes only files missing from ``cache``,
+    writing the cache every ``save_every`` files so an interrupted run keeps its progress."""
     durations = {}
     if cache.is_file():
         with cache.open(newline="", encoding="utf-8") as f:
             durations = {r["audio"]: float(r["seconds"]) for r in csv.DictReader(f)}
     missing = sorted(set(audios) - set(durations))
+    print(f"{len(set(audios)) - len(missing)} / {len(set(audios))} audio durations cached, {len(missing)} missing")
     if compute and missing:
         failures = {}
-        for audio in missing:
+        for n, audio in enumerate(missing, 1):
             try:
                 seconds = len(load_mono_audio(raw_dir / audio, sr=DURATION_SR)) / DURATION_SR
                 if seconds <= 0:
@@ -36,15 +39,22 @@ def audio_durations(raw_dir: Path, audios, cache: Path, compute: bool = False) -
                 durations[audio] = seconds
             except Exception as e:
                 failures[audio] = f"{type(e).__name__}: {e}"
-        cache.parent.mkdir(parents=True, exist_ok=True)
-        with cache.open("w", newline="", encoding="utf-8") as f:
-            writer = csv.writer(f)
-            writer.writerow(["audio", "seconds"])
-            writer.writerows(sorted(durations.items()))
-        print(f"decoded {len(missing) - len(failures)} audio files, {len(failures)} failed")
+            if n % save_every == 0 or n == len(missing):
+                write_durations(cache, durations)
+                print(f"  {n} / {len(missing)} decoded, {len(failures)} failed", flush=True)
         for audio, error in list(failures.items())[:5]:
             print("  ", audio, error)
     return {a: durations[a] for a in audios if a in durations}
+
+
+def write_durations(cache: Path, durations: dict[str, float]):
+    cache.parent.mkdir(parents=True, exist_ok=True)
+    tmp = cache.with_suffix(".tmp")
+    with tmp.open("w", newline="", encoding="utf-8") as f:
+        writer = csv.writer(f)
+        writer.writerow(["audio", "seconds"])
+        writer.writerows(sorted(durations.items()))
+    tmp.replace(cache)
 
 
 def densities(rows, durations: dict[str, float]) -> dict[str, float]:
