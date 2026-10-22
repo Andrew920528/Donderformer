@@ -1,8 +1,9 @@
 """TaikoNation-style windows cut on the fly from cached features.
 
-For frame i, with C = context, F = look_forward, T = targets, A = C + 1 + F:
+For frame i, with A = audio_frames, H = history, F = look_forward, T = targets
+and P = A - 1 - F past audio frames:
 
-    X = [mel i-C .. i+F  (A x 80),  labels i-C .. i-1  (C x 7)]  flattened
+    X = [mel i-P .. i+F  (A x 80),  labels i-H .. i-1  (H x 7)]  flattened
     Y = labels i .. i+T-1  (T x 7)
 
 Out-of-range frames are zero-padded.
@@ -10,7 +11,6 @@ Out-of-range frames are zero-padded.
 from __future__ import annotations
 
 import bisect
-import warnings
 from dataclasses import asdict, dataclass
 
 import numpy as np
@@ -28,35 +28,43 @@ N_CLASSES = 7
 
 @dataclass(frozen=True)
 class Window:
-    """Input layout shared by ``TaikoDataset`` and ``TaikoNationBaseline``."""
-    context: int = 12        # past note frames
-    look_forward: int = 3    # audio frames after frame i
-    targets: int = 4         # predicted frames
+    """Input layout shared by ``TaikoDataset`` and ``TaikoNationBaseline``.
+
+    The default is the TaikoNation paper's: 16 audio frames ending at frame i,
+    the 15 previous notes, and the next 4 frames predicted.
+    """
+    audio_frames: int = 16   # audio frames per window, ending at i + look_forward
+    history: int = 15        # previous note frames, i-H .. i-1
+    look_forward: int = 0    # audio frames after frame i
+    targets: int = 4         # predicted frames, i .. i+T-1
 
     def __post_init__(self):
-        if self.context < 0 or self.look_forward < 0 or self.targets < 1:
+        if min(self.history, self.look_forward) < 0 or self.targets < 1:
             raise ValueError(f"invalid window {self}")
         if self.audio_frames < 4:
-            raise ValueError("need at least 4 audio frames for the model's two pooling layers")
-        if self.look_forward < self.targets - 1:
-            warnings.warn(f"look_forward={self.look_forward} < targets-1={self.targets - 1}: "
-                          "the audio doesn't reach every predicted frame", stacklevel=3)
+            raise ValueError("audio_frames must be >= 4 for the model's two pooling layers")
+        if self.history > self.past_frames:
+            raise ValueError(f"history={self.history} reaches before the audio "
+                             f"(audio_frames - 1 - look_forward = {self.past_frames})")
 
     @property
-    def audio_frames(self) -> int:
-        return self.context + 1 + self.look_forward
-
-    @property
-    def placeholders(self) -> int:
-        return 1 + self.look_forward
+    def past_frames(self) -> int:
+        """Audio frames before frame i."""
+        return self.audio_frames - 1 - self.look_forward
 
     @property
     def n_inputs(self) -> int:
-        return self.audio_frames * N_MELS + self.context * N_CLASSES
+        return self.audio_frames * N_MELS + self.history * N_CLASSES
 
     @property
     def name(self) -> str:
-        return f"c{self.context}_f{self.look_forward}"
+        return f"a{self.audio_frames}_h{self.history}_f{self.look_forward}"
+
+    def describe(self) -> str:
+        P, H, F, T = self.past_frames, self.history, self.look_forward, self.targets
+        span = lambda a, b: "i" + (f"{a:+d}" if a else "") + " .. i" + (f"{b:+d}" if b else "")
+        return (f"audio {span(-P, F)}, notes {span(-H, -1) if H else 'none'}, predicts {span(0, T - 1)}"
+                + ("" if F >= T - 1 else f" ({T - 1 - F} predicted frames have no audio)"))
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -104,7 +112,7 @@ class TaikoDataset(Dataset):
         labels = np.load(self.extractor.labels_path(self.paths, row["audio_id"], row["chart_id"]))
         mel = ((mel - self.mean) / (self.std + 1e-8)).astype(np.float32)
         w = self.window
-        pad = w.context
+        pad = w.past_frames
         # audio may reach past the last target frame
         end_pad = max(w.look_forward - (w.targets - 1), 0)
         mel = np.vstack([np.zeros((pad, mel.shape[1]), np.float32), mel,
@@ -115,8 +123,8 @@ class TaikoDataset(Dataset):
     def _window(self, mel, labels, pad, frames):
         w = self.window
         i = frames[:, None] + pad
-        audio = mel[i - w.context + np.arange(w.audio_frames)]
-        history = labels[i - w.context + np.arange(w.context)]
+        audio = mel[i - w.past_frames + np.arange(w.audio_frames)]
+        history = labels[i - w.history + np.arange(w.history)]
         targets = labels[i + np.arange(w.targets)]
         X = np.concatenate([audio.reshape(len(frames), -1), history.reshape(len(frames), -1)], axis=1)
         return X, targets

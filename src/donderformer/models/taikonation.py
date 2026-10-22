@@ -3,8 +3,9 @@
 Input: ``(batch, window.n_inputs)``, a flattened ``TaikoDataset`` window.
 Output: logits ``(batch, window.targets, 7)``.
 
-The LSTM runs over the A audio rows; row k is multiplied by note row k (one-hot + 1),
-and the ``window.placeholders`` rows from frame i onward by ones.
+The LSTM runs over the A audio rows, one per frame. Rows i-H .. i-1 are multiplied
+by that frame's note (one-hot + 1); every other row (older than the history, or
+frame i onward) by ones.
 """
 from __future__ import annotations
 
@@ -49,11 +50,11 @@ class TaikoNationBaseline(nn.Module):
 
     # send the audio through the CNN to find useful patters in the audio features
     def forward(self, x):
-        A, H = self.audio_frames, self.window.context
+        A, H = self.audio_frames, self.window.history
         if x.shape[1] != self.n_inputs:
             raise ValueError(f"expected {self.n_inputs} inputs ({A} audio + {H} note frames), got {x.shape[1]}")
         audio = x[:, :A * N_MELS].reshape(-1, A, N_MELS)
-        notes = x[:, A * N_MELS:].reshape(-1, H, N_CLASSES)
+        notes = x[:, A * N_MELS:].reshape(x.shape[0], H, N_CLASSES)
 
         audio = audio.transpose(1, 2)
 
@@ -68,22 +69,10 @@ class TaikoNationBaseline(nn.Module):
         audio = self.relu(self.audio_fc(audio))
         audio = audio.reshape(-1, A, 8)
 
-        note_bias = torch.ones(
-            notes.shape[0], H, 1,
-            device=notes.device,
-            dtype=notes.dtype
-        )
-
-        note_history = torch.cat([notes, note_bias], dim=2)
-
-        current_placeholder = torch.ones(
-            notes.shape[0], self.window.placeholders, 8,
-            device=notes.device,
-            dtype=notes.dtype
-        )
-
+        ones = lambda rows, width: torch.ones(notes.shape[0], rows, width, device=notes.device, dtype=notes.dtype)
+        note_history = torch.cat([notes, ones(H, 1)], dim=2)
         note_context = torch.cat(
-            [note_history, current_placeholder],
+            [ones(self.window.past_frames - H, 8), note_history, ones(1 + self.window.look_forward, 8)],
             dim=1
         )
 
