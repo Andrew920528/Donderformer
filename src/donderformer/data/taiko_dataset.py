@@ -2,11 +2,15 @@
 
 For frame ``i`` of a chart, one sample is
 
-    X = [mel frames i-A+1 .. i  (A x n_mels),  label frames i-H .. i-1  (H x 7)]  flattened
+    X = [mel frames i-A+1+L .. i+L  (A x n_mels),  label frames i-H .. i-1  (H x 7)]  flattened
     Y = label frames i .. i+T-1  (T x 7)
 
-with A = ``audio_frames``, H = ``history_frames``, T = ``target_frames`` and zero
-padding before the start. The defaults (16, 15, 4) give TaikoNation's 1385 inputs.
+with A = ``audio_frames``, H = ``history_frames``, T = ``target_frames``,
+L = ``audio_lookahead`` and zero padding before the start (and after the end when
+L > T-1). With L = T-1 the audio covers every target frame; L = 0 is the original
+window, whose audio ends at the first target. The defaults (16, 15, 4, 0) give
+TaikoNation's 1385 inputs; (16, 12, 4, 3) is the aligned layout of the original
+TaikoNation code (12 past notes + 4 placeholder rows, audio i-12 .. i+3).
 Changing them needs no re-extraction.
 """
 from __future__ import annotations
@@ -24,9 +28,13 @@ from donderformer.paths import DataPaths
 
 class TaikoDataset(Dataset):
     def __init__(self, paths: DataPaths, split: str, extractor: FeatureExtractor, part: str = "train",
-                 audio_frames: int = 16, history_frames: int = 15, target_frames: int = 4):
+                 audio_frames: int = 16, history_frames: int = 15, target_frames: int = 4,
+                 audio_lookahead: int = 0):
+        if audio_lookahead < 0 or audio_lookahead >= audio_frames:
+            raise ValueError(f"audio_lookahead must be in [0, audio_frames), got {audio_lookahead}")
         self.paths, self.split, self.extractor, self.part = paths, split, extractor, part
         self.audio_frames, self.history_frames, self.target_frames = audio_frames, history_frames, target_frames
+        self.audio_lookahead = audio_lookahead
 
         rows = read_manifest(paths, split, part)
         failed = extractor.failed_charts(paths, split)
@@ -58,20 +66,24 @@ class TaikoDataset(Dataset):
         return torch.from_numpy(X[0]), torch.from_numpy(Y[0])
 
     def chart_arrays(self, chart_index):
-        """Normalized mel and labels of one chart, zero-padded at the front for windowing."""
+        """Normalized mel and labels of one chart, zero-padded for windowing; returns the front pad."""
         row = self.charts[chart_index]
         mel = np.load(self.extractor.mel_path(self.paths, row["audio_id"]))
         labels = np.load(self.extractor.labels_path(self.paths, row["audio_id"], row["chart_id"]))
         mel = ((mel - self.mean) / (self.std + 1e-8)).astype(np.float32)
-        pad = max(self.audio_frames - 1, self.history_frames)
-        mel = np.vstack([np.zeros((pad, mel.shape[1]), np.float32), mel])
+        pad = max(self.audio_frames - 1 - self.audio_lookahead, self.history_frames, 0)
+        # The last window's audio reaches audio_lookahead frames past its anchor, its targets
+        # target_frames - 1; pad the mel end for any lookahead beyond the targets.
+        end_pad = max(self.audio_lookahead - (self.target_frames - 1), 0)
+        mel = np.vstack([np.zeros((pad, mel.shape[1]), np.float32), mel,
+                         np.zeros((end_pad, mel.shape[1]), np.float32)])
         labels = np.vstack([np.zeros((pad, 7), np.float32), labels.astype(np.float32)])
         return mel, labels, pad
 
     def _window(self, mel, labels, pad, frames):
-        A, H, T = self.audio_frames, self.history_frames, self.target_frames
+        A, H, T, L = self.audio_frames, self.history_frames, self.target_frames, self.audio_lookahead
         i = frames[:, None] + pad
-        audio = mel[i - A + 1 + np.arange(A)]
+        audio = mel[i - A + 1 + L + np.arange(A)]
         history = labels[i - H + np.arange(H)]
         targets = labels[i + np.arange(T)]
         X = np.concatenate([audio.reshape(len(frames), -1), history.reshape(len(frames), -1)], axis=1)
