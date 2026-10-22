@@ -1,0 +1,29 @@
+{
+  "model": "taikonation",
+  "alias": "andrew_test_run",
+  "data": {
+    "split": "oni_v1",
+    "features": "frame23ms",
+    "audio_frames": 16,
+    "history_frames": 15,
+    "target_frames": 4
+  },
+  "hparams": {
+    "batch_size": 128,
+    "epochs": 10,
+    "lr": 1e-05,
+    "finetune_batch_size": 128,
+    "finetune_epochs": 2,
+    "finetune_lr": 5e-06
+  },
+  "device": "cuda",
+  "run": "20261020_165541-andrew_test_run-oni_v1-frame23ms",
+  "saved_at": "2026-10-20T18:11:31",
+  "user": "yhsu72",
+  "host": "atl1-1-03-017-2-0.pace.gatech.edu",
+  "git": {
+    "commit": "cab9cc1a1d7478674df3cf24285424893dd03f9c",
+    "branch": "refactor",
+    "dirty": false
+  }
+}

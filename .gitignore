@@ -24,9 +24,9 @@ env/
 data/raw/
 data/features/
 
-# Checkpoints and generated charts
+# Trained weights and inferences
 outputs/
-*.pt
+
 
 # Playground is scratch space; only its README and the toy dataset are tracked
 playground/*
