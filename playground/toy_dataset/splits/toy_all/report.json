@@ -1,0 +1,303 @@
+{
+  "name": "toy_all",
+  "config": {
+    "name": "toy_all",
+    "courses": null,
+    "genres": null,
+    "bpm_range": null,
+    "level_range": null,
+    "ratios": [
+      0.8,
+      0.1,
+      0.1
+    ],
+    "seed": 42
+  },
+  "totals": {
+    "scanned_charts": 50,
+    "usable_charts": 35,
+    "kept_charts": 35,
+    "kept_songs": 12,
+    "lost_charts": 15
+  },
+  "lost_reasons": {
+    "nested_long_note": 13,
+    "multiple_sections": 1,
+    "unsupported_command:#LYRIC": 1
+  },
+  "scanned_by_course": {
+    "easy": 12,
+    "normal": 12,
+    "hard": 12,
+    "oni": 12,
+    "ura": 2
+  },
+  "usable_by_course": {
+    "easy": 6,
+    "hard": 10,
+    "normal": 7,
+    "oni": 12
+  },
+  "kept_by": {
+    "split": {
+      "train": 26,
+      "validation": 4,
+      "test": 5
+    },
+    "course": {
+      "easy": 6,
+      "hard": 10,
+      "normal": 7,
+      "oni": 12
+    },
+    "genre": {
+      "01 Pop": 5,
+      "02 Anime": 17,
+      "03 Vocaloid": 1,
+      "04 Children and Folk": 2,
+      "09 Namco Original": 10
+    },
+    "level": {
+      "1": 2,
+      "2": 2,
+      "3": 4,
+      "4": 5,
+      "5": 6,
+      "6": 4,
+      "7": 6,
+      "8": 3,
+      "9": 3
+    },
+    "split_course": {
+      "train": {
+        "easy": 4,
+        "hard": 8,
+        "normal": 5,
+        "oni": 9
+      },
+      "validation": {
+        "easy": 1,
+        "hard": 1,
+        "normal": 1,
+        "oni": 1
+      },
+      "test": {
+        "easy": 1,
+        "hard": 1,
+        "normal": 1,
+        "oni": 2
+      }
+    }
+  },
+  "kept_bpm": [
+    73.0,
+    73.0,
+    73.0,
+    73.0,
+    129.5,
+    129.5,
+    133.0,
+    133.0,
+    133.0,
+    133.0,
+    138.0,
+    148.0,
+    148.0,
+    148.0,
+    148.0,
+    154.0,
+    158.5,
+    158.5,
+    158.5,
+    158.5,
+    166.0,
+    166.0,
+    166.0,
+    166.0,
+    168.0,
+    168.0,
+    168.0,
+    168.0,
+    170.0,
+    170.0,
+    182.0,
+    182.0,
+    183.0,
+    183.0,
+    183.0
+  ],
+  "kept": [
+    "dance_my_generation_f3d132_oni",
+    "dance_my_generation_f3d132_hard",
+    "dance_my_generation_f3d132_normal",
+    "dance_my_generation_f3d132_easy",
+    "yes_or_yes_3f16f8_oni",
+    "blood_circulator_10c23d_oni",
+    "blood_circulator_10c23d_hard",
+    "blood_circulator_10c23d_normal",
+    "idol_c347e2_oni",
+    "idol_c347e2_hard",
+    "idol_c347e2_normal",
+    "idol_c347e2_easy",
+    "running_in_the_90s_735b41_oni",
+    "running_in_the_90s_735b41_hard",
+    "running_in_the_90s_735b41_normal",
+    "running_in_the_90s_735b41_easy",
+    "sketch_c868cf_oni",
+    "sketch_c868cf_hard",
+    "sketch_c868cf_normal",
+    "sketch_c868cf_easy",
+    "tonari_no_totoro_ca9f9d_oni",
+    "tonari_no_totoro_ca9f9d_hard",
+    "senbonzakura_839118_oni",
+    "healin_good_pretty_cure_touch_cf9186_oni",
+    "healin_good_pretty_cure_touch_cf9186_hard",
+    "crane_city_95a3c9_oni",
+    "crane_city_95a3c9_hard",
+    "crane_city_95a3c9_normal",
+    "crane_city_95a3c9_easy",
+    "megamina_sekai_i_e1569b_oni",
+    "megamina_sekai_i_e1569b_hard",
+    "megamina_sekai_i_e1569b_normal",
+    "megamina_sekai_i_e1569b_easy",
+    "shoujo_no_kami_no_ryuushi_a8fa05_oni",
+    "shoujo_no_kami_no_ryuushi_a8fa05_hard"
+  ],
+  "lost": [
+    {
+      "chart_id": "dance_my_generation_f3d132_ura",
+      "title": "Dance My Generation",
+      "course": "ura",
+      "tja": "01 Pop/Dance My Generation/Dance My Generation.tja",
+      "reasons": [
+        "multiple_sections"
+      ]
+    },
+    {
+      "chart_id": "yes_or_yes_3f16f8_hard",
+      "title": "YES or YES",
+      "course": "hard",
+      "tja": "01 Pop/yes_or_yes/YES or YES.tja",
+      "reasons": [
+        "nested_long_note"
+      ]
+    },
+    {
+      "chart_id": "yes_or_yes_3f16f8_normal",
+      "title": "YES or YES",
+      "course": "normal",
+      "tja": "01 Pop/yes_or_yes/YES or YES.tja",
+      "reasons": [
+        "nested_long_note"
+      ]
+    },
+    {
+      "chart_id": "yes_or_yes_3f16f8_easy",
+      "title": "YES or YES",
+      "course": "easy",
+      "tja": "01 Pop/yes_or_yes/YES or YES.tja",
+      "reasons": [
+        "nested_long_note"
+      ]
+    },
+    {
+      "chart_id": "blood_circulator_10c23d_easy",
+      "title": "Blood Circulator",
+      "course": "easy",
+      "tja": "02 Anime/Blood Circulator/Blood Circulator.tja",
+      "reasons": [
+        "nested_long_note"
+      ]
+    },
+    {
+      "chart_id": "tonari_no_totoro_ca9f9d_normal",
+      "title": "Tonari no Totoro",
+      "course": "normal",
+      "tja": "02 Anime/Tonari no Totoro/Tonari no Totoro.tja",
+      "reasons": [
+        "nested_long_note"
+      ]
+    },
+    {
+      "chart_id": "tonari_no_totoro_ca9f9d_easy",
+      "title": "Tonari no Totoro",
+      "course": "easy",
+      "tja": "02 Anime/Tonari no Totoro/Tonari no Totoro.tja",
+      "reasons": [
+        "nested_long_note"
+      ]
+    },
+    {
+      "chart_id": "senbonzakura_839118_ura",
+      "title": "Senbonzakura",
+      "course": "ura",
+      "tja": "03 Vocaloid/Senbonzakura/Senbonzakura.tja",
+      "reasons": [
+        "unsupported_command:#LYRIC"
+      ]
+    },
+    {
+      "chart_id": "senbonzakura_839118_hard",
+      "title": "Senbonzakura",
+      "course": "hard",
+      "tja": "03 Vocaloid/Senbonzakura/Senbonzakura.tja",
+      "reasons": [
+        "nested_long_note"
+      ]
+    },
+    {
+      "chart_id": "senbonzakura_839118_normal",
+      "title": "Senbonzakura",
+      "course": "normal",
+      "tja": "03 Vocaloid/Senbonzakura/Senbonzakura.tja",
+      "reasons": [
+        "nested_long_note"
+      ]
+    },
+    {
+      "chart_id": "senbonzakura_839118_easy",
+      "title": "Senbonzakura",
+      "course": "easy",
+      "tja": "03 Vocaloid/Senbonzakura/Senbonzakura.tja",
+      "reasons": [
+        "nested_long_note"
+      ]
+    },
+    {
+      "chart_id": "healin_good_pretty_cure_touch_cf9186_normal",
+      "title": "Healin’ Good♥Pretty Cure Touch!!",
+      "course": "normal",
+      "tja": "04 Children and Folk/Healin Good Pretty Cure Touch/Healin Good Pretty Cure Touch.tja",
+      "reasons": [
+        "nested_long_note"
+      ]
+    },
+    {
+      "chart_id": "healin_good_pretty_cure_touch_cf9186_easy",
+      "title": "Healin’ Good♥Pretty Cure Touch!!",
+      "course": "easy",
+      "tja": "04 Children and Folk/Healin Good Pretty Cure Touch/Healin Good Pretty Cure Touch.tja",
+      "reasons": [
+        "nested_long_note"
+      ]
+    },
+    {
+      "chart_id": "shoujo_no_kami_no_ryuushi_a8fa05_normal",
+      "title": "Shoujo no Kami no Ryuushi",
+      "course": "normal",
+      "tja": "09 Namco Original/Shoujo no Kami no Ryuushi/Shoujo no Kami no Ryuushi.tja",
+      "reasons": [
+        "nested_long_note"
+      ]
+    },
+    {
+      "chart_id": "shoujo_no_kami_no_ryuushi_a8fa05_easy",
+      "title": "Shoujo no Kami no Ryuushi",
+      "course": "easy",
+      "tja": "09 Namco Original/Shoujo no Kami no Ryuushi/Shoujo no Kami no Ryuushi.tja",
+      "reasons": [
+        "nested_long_note"
+      ]
+    }
+  ]
+}
