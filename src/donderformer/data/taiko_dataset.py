@@ -1,21 +1,17 @@
-"""TaikoDataset: TaikoNation-style windows cut on the fly from cached features.
+"""TaikoNation-style windows cut on the fly from cached features.
 
-For frame ``i`` of a chart, one sample is
+For frame i, with C = context, F = look_forward, T = targets, A = C + 1 + F:
 
-    X = [mel frames i-A+1+L .. i+L  (A x n_mels),  label frames i-H .. i-1  (H x 7)]  flattened
-    Y = label frames i .. i+T-1  (T x 7)
+    X = [mel i-C .. i+F  (A x 80),  labels i-C .. i-1  (C x 7)]  flattened
+    Y = labels i .. i+T-1  (T x 7)
 
-with A = ``audio_frames``, H = ``history_frames``, T = ``target_frames``,
-L = ``audio_lookahead`` and zero padding before the start (and after the end when
-L > T-1). With L = T-1 the audio covers every target frame; L = 0 is the original
-window, whose audio ends at the first target. The defaults (16, 12, 4, 3) are the
-aligned layout of the original TaikoNation code (12 past notes + 4 placeholder rows,
-audio i-12 .. i+3); (16, 15, 4, 0) is the first port's window (1385 inputs).
-Changing them needs no re-extraction.
+Out-of-range frames are zero-padded.
 """
 from __future__ import annotations
 
 import bisect
+import warnings
+from dataclasses import asdict, dataclass
 
 import numpy as np
 import torch
@@ -26,15 +22,51 @@ from donderformer.data.data_splitter import read_manifest
 from donderformer.paths import DataPaths
 
 
+N_MELS = 80
+N_CLASSES = 7
+
+
+@dataclass(frozen=True)
+class Window:
+    """Input layout shared by ``TaikoDataset`` and ``TaikoNationBaseline``."""
+    context: int = 12        # past note frames
+    look_forward: int = 3    # audio frames after frame i
+    targets: int = 4         # predicted frames
+
+    def __post_init__(self):
+        if self.context < 0 or self.look_forward < 0 or self.targets < 1:
+            raise ValueError(f"invalid window {self}")
+        if self.audio_frames < 4:
+            raise ValueError("need at least 4 audio frames for the model's two pooling layers")
+        if self.look_forward < self.targets - 1:
+            warnings.warn(f"look_forward={self.look_forward} < targets-1={self.targets - 1}: "
+                          "the audio doesn't reach every predicted frame", stacklevel=3)
+
+    @property
+    def audio_frames(self) -> int:
+        return self.context + 1 + self.look_forward
+
+    @property
+    def placeholders(self) -> int:
+        return 1 + self.look_forward
+
+    @property
+    def n_inputs(self) -> int:
+        return self.audio_frames * N_MELS + self.context * N_CLASSES
+
+    @property
+    def name(self) -> str:
+        return f"c{self.context}_f{self.look_forward}"
+
+    def to_dict(self) -> dict:
+        return asdict(self)
+
+
 class TaikoDataset(Dataset):
     def __init__(self, paths: DataPaths, split: str, extractor: FeatureExtractor, part: str = "train",
-                 audio_frames: int = 16, history_frames: int = 12, target_frames: int = 4,
-                 audio_lookahead: int = 3):
-        if audio_lookahead < 0 or audio_lookahead >= audio_frames:
-            raise ValueError(f"audio_lookahead must be in [0, audio_frames), got {audio_lookahead}")
+                 window: Window = Window()):
         self.paths, self.split, self.extractor, self.part = paths, split, extractor, part
-        self.audio_frames, self.history_frames, self.target_frames = audio_frames, history_frames, target_frames
-        self.audio_lookahead = audio_lookahead
+        self.window = window
 
         rows = read_manifest(paths, split, part)
         failed = extractor.failed_charts(paths, split)
@@ -48,7 +80,7 @@ class TaikoDataset(Dataset):
         self.lengths = []
         for row in self.charts:
             n_frames = len(np.load(extractor.mel_path(paths, row["audio_id"]), mmap_mode="r"))
-            self.lengths.append(max(n_frames - (target_frames - 1), 0))
+            self.lengths.append(max(n_frames - (window.targets - 1), 0))
         self.ends = np.cumsum(self.lengths).tolist()
         self._cached_chart = None
         self._cached_arrays = None
@@ -71,21 +103,21 @@ class TaikoDataset(Dataset):
         mel = np.load(self.extractor.mel_path(self.paths, row["audio_id"]))
         labels = np.load(self.extractor.labels_path(self.paths, row["audio_id"], row["chart_id"]))
         mel = ((mel - self.mean) / (self.std + 1e-8)).astype(np.float32)
-        pad = max(self.audio_frames - 1 - self.audio_lookahead, self.history_frames, 0)
-        # The last window's audio reaches audio_lookahead frames past its anchor, its targets
-        # target_frames - 1; pad the mel end for any lookahead beyond the targets.
-        end_pad = max(self.audio_lookahead - (self.target_frames - 1), 0)
+        w = self.window
+        pad = w.context
+        # audio may reach past the last target frame
+        end_pad = max(w.look_forward - (w.targets - 1), 0)
         mel = np.vstack([np.zeros((pad, mel.shape[1]), np.float32), mel,
                          np.zeros((end_pad, mel.shape[1]), np.float32)])
-        labels = np.vstack([np.zeros((pad, 7), np.float32), labels.astype(np.float32)])
+        labels = np.vstack([np.zeros((pad, N_CLASSES), np.float32), labels.astype(np.float32)])
         return mel, labels, pad
 
     def _window(self, mel, labels, pad, frames):
-        A, H, T, L = self.audio_frames, self.history_frames, self.target_frames, self.audio_lookahead
+        w = self.window
         i = frames[:, None] + pad
-        audio = mel[i - A + 1 + L + np.arange(A)]
-        history = labels[i - H + np.arange(H)]
-        targets = labels[i + np.arange(T)]
+        audio = mel[i - w.context + np.arange(w.audio_frames)]
+        history = labels[i - w.context + np.arange(w.context)]
+        targets = labels[i + np.arange(w.targets)]
         X = np.concatenate([audio.reshape(len(frames), -1), history.reshape(len(frames), -1)], axis=1)
         return X, targets
 
