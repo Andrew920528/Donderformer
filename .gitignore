@@ -20,7 +20,7 @@ env/
 .idea/
 
 # Data: raw audio/charts and preprocessing output move with rsync, never git.
-# data/splits/ and data/meta/ (EDA, audio durations) are committed.
+# data/splits/ and data/eda/ (analysis plots, audio durations) are committed.
 data/raw/
 data/features/
 

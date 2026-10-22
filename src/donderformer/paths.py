@@ -10,7 +10,7 @@ Every data root has the same layout, so the toy dataset is just another root::
     data/
     ├── raw/                     # ESE song folders (genre/song/*.tja, audio)
     ├── splits/<split>/          # DataSplitter output (committed)
-    ├── meta/                    # dataset EDA and audio durations (committed)
+    ├── eda/                     # dataset/split analysis plots and audio durations (committed)
     └── features/<extractor>/    # FeatureExtractor cache (gitignored)
 """
 from __future__ import annotations
@@ -48,8 +48,8 @@ class DataPaths:
         return self.splits / name
 
     @property
-    def meta(self) -> Path:
-        return self.root / "meta"
+    def eda(self) -> Path:
+        return self.root / "eda"
 
     @property
     def features(self) -> Path:
