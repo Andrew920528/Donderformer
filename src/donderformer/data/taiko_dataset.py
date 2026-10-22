@@ -8,9 +8,9 @@ For frame ``i`` of a chart, one sample is
 with A = ``audio_frames``, H = ``history_frames``, T = ``target_frames``,
 L = ``audio_lookahead`` and zero padding before the start (and after the end when
 L > T-1). With L = T-1 the audio covers every target frame; L = 0 is the original
-window, whose audio ends at the first target. The defaults (16, 15, 4, 0) give
-TaikoNation's 1385 inputs; (16, 12, 4, 3) is the aligned layout of the original
-TaikoNation code (12 past notes + 4 placeholder rows, audio i-12 .. i+3).
+window, whose audio ends at the first target. The defaults (16, 12, 4, 3) are the
+aligned layout of the original TaikoNation code (12 past notes + 4 placeholder rows,
+audio i-12 .. i+3); (16, 15, 4, 0) is the first port's window (1385 inputs).
 Changing them needs no re-extraction.
 """
 from __future__ import annotations
@@ -28,8 +28,8 @@ from donderformer.paths import DataPaths
 
 class TaikoDataset(Dataset):
     def __init__(self, paths: DataPaths, split: str, extractor: FeatureExtractor, part: str = "train",
-                 audio_frames: int = 16, history_frames: int = 15, target_frames: int = 4,
-                 audio_lookahead: int = 0):
+                 audio_frames: int = 16, history_frames: int = 12, target_frames: int = 4,
+                 audio_lookahead: int = 3):
         if audio_lookahead < 0 or audio_lookahead >= audio_frames:
             raise ValueError(f"audio_lookahead must be in [0, audio_frames), got {audio_lookahead}")
         self.paths, self.split, self.extractor, self.part = paths, split, extractor, part

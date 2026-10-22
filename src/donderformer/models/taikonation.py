@@ -10,10 +10,11 @@ The LSTM runs over A rows. Row k pairs the audio features with note row k: the f
 H rows carry the past notes, the remaining 1 + look_forward rows are all-ones
 placeholders for the frames being predicted (and any extra lookahead).
 
-- ``TaikoNationBaseline()`` is the original port: 16 audio frames ending at the first
-  target, 15 past notes and 1 placeholder (1385 inputs). Old checkpoints load into it.
-- ``TaikoNationBaseline(context_length=12, look_forward=3)`` is the layout of the
+- ``TaikoNationBaseline()`` (context_length=12, look_forward=3) is the layout of the
   original TaikoNation code: audio i-12 .. i+3, 12 past notes, 4 placeholders (1364 inputs).
+- ``TaikoNationBaseline(context_length=15, look_forward=0)`` is the first port: 16 audio
+  frames ending at the first target, 15 past notes and 1 placeholder (1385 inputs).
+  Checkpoints from before this change (e.g. the oni_v1 PACE run) load into it.
 
 ``dropout`` is the probability of *dropping* an activation (PyTorch). TaikoNation's
 tflearn code used keep_prob=0.8, i.e. dropout=0.2; the first port used 0.8 by mistake.
@@ -30,7 +31,7 @@ TARGET_FRAMES = 4
 
 
 class TaikoNationBaseline(nn.Module):
-    def __init__(self, context_length: int = 15, look_forward: int = 0, dropout: float = 0.2):
+    def __init__(self, context_length: int = 12, look_forward: int = 3, dropout: float = 0.2):
         super().__init__()
         self.context_length, self.look_forward = context_length, look_forward
         self.audio_frames = context_length + 1 + look_forward
