@@ -1,5 +1,10 @@
 # Results
 
+These are historical results from the original pipeline. Onset/joint F1 counted
+held-note frames separately; current evaluation counts held-note starts. Re-score
+saved charts before comparing these F1 numbers with new runs. Legacy eight-frame
+paper metrics retain their definitions; see [evaluation notes](evaluation.md).
+
 ## TaikoNation CNN-LSTM baseline, full Oni split (PACE)
 
 Run by ykim3001 on PACE with the pre-refactor pipeline; the notebook and its outputs are in `notebooks/reference/baseline_cnn_lstm_full_pace.ipynb`.

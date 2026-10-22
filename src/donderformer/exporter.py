@@ -1,6 +1,6 @@
 """ChartExporter: package generated charts as song folders a TJA simulator can load.
 
-Each source is a folder of ``<chart_id>.npz`` files as ``03_train_lstm`` writes them to
+Each source is a folder of ``<chart_id>.npz`` files as ``06_evaluation`` writes them to
 ``<run>/eval/ar_test/charts/`` (arrays ``generated``, ``clean`` and ``human``). Songs every source has
 are exported side by side, one ``.tja`` per source next to a single copy of the audio::
 
@@ -80,7 +80,7 @@ class ChartExporter:
         return rows
 
     def level(self, row) -> int | None:
-        """Star level from the manifest, else from the chart's own TJA (oni_v1 has no level column)."""
+        """Star level from the manifest, else from the chart's own TJA (oni_v1 has blank level values)."""
         if row.get("level"):
             return int(float(row["level"]))
         text = (self.paths.raw / row["tja"]).read_text(encoding="utf-8-sig")

@@ -9,6 +9,11 @@ Donderformer/
 ├── src/donderformer/        # importable logic
 │   ├── paths.py             # DataPaths: where data lives
 │   ├── training.py          # train_epoch / evaluate loops
+│   ├── evaluation.py        # note-start F1, sampling, saved-run setup
+│   ├── chart_evaluation.py  # model-independent patterns, bands, random control
+│   ├── evaluation_config.py # one dict of provisional evaluation settings
+│   ├── evaluation_comparison.py # paired model statistics and plots
+│   ├── token_adapter.py     # assumed token-format adapter (TODO: team spec)
 │   ├── runs.py              # one output folder per training run
 │   ├── exporter.py          # ChartExporter: song folders for a TJA simulator
 │   ├── models/
@@ -26,7 +31,8 @@ Donderformer/
 │   ├── 03_train_lstm.ipynb
 │   ├── 04_train_transformer.ipynb   # (empty for now)
 │   ├── 05_generate_songs.ipynb      # (empty for now)
-│   ├── 06_evaluation.ipynb          # (empty for now)
+│   ├── 06_evaluation.ipynb          # evaluate a saved run without retraining
+│   ├── 07_compare_models.ipynb # saved LSTM/Transformer/random comparison
 │   ├── 07_exports.ipynb     # generated charts as simulator-ready song folders
 │   └── reference/           # earlier notebooks kept as-is for comparison
 ├── data/                    # see data/README.md; only data/splits/ is committed
@@ -67,8 +73,8 @@ mkdir -p "$REPO/data/raw" && mv "$ESE"/* "$REPO/data/raw/" && rmdir "$ESE"
 
 1. **`01_make_split.ipynb`** uses a `DataSplitter` (courses, genres, BPM and level ranges, ratios, seed) to pick charts and split them by audio file. It writes `splits/<name>/` with `config.json`, `manifest.csv` and a `report.json` of what was kept, what was lost and why, plus distributions. Splits are never edited in place; a new filter means a new name. `data/splits/oni_v1` is the Oni split used so far.
 2. **`02_extract_features.ipynb`** uses a `FeatureExtractor` (frame length) to cache log-mel per audio file and labels per chart under `features/<extractor.id>/`, then fits that split's normalization on its train songs. Cached songs are skipped, so new splits are cheap.
-3. **`03_train_lstm.ipynb`** loads `TaikoDataset(paths, split, extractor, part, audio_frames, history_frames, target_frames)`, which cuts windows on the fly, then trains the CNN-LSTM baseline (stage 1, then a lower-learning-rate fine-tune) and saves it to a new run folder (see below). The same notebook then evaluates on the test charts, both teacher-forced (the model sees the human chart's previous notes) and autoregressive (it sees only its own generated notes, as it would on a new song), and writes metrics, generated charts and plots to that run's `eval/` folder. Results of the full-data PACE run are in [docs/results.md](docs/results.md).
-4. **`04_train_transformer`, `05_generate_songs`, `06_evaluation`** are placeholders for now.
+3. **`03_train_lstm.ipynb`** loads `TaikoDataset(paths, split, extractor, part, audio_frames, history_frames, target_frames)`, which cuts windows on the fly, then trains the CNN-LSTM baseline (stage 1, then a lower-learning-rate fine-tune) and saves it to a new run folder (see below). `06_evaluation.ipynb` loads that saved run and evaluates on the test charts, both teacher-forced (the model sees the human chart's previous notes) and autoregressive (it sees only its own generated notes, as it would on a new song), and writes metrics, generated charts and plots to that run's `eval/` folder. Results of the full-data PACE run are in [docs/results.md](docs/results.md).
+4. **`04_train_transformer`, `05_generate_songs`** are placeholders for now.
 5. **`07_exports.ipynb`** uses a `ChartExporter` (`src/donderformer/exporter.py`) to package generated charts from one or more runs as `outputs/exports/<datetime>-<alias>/<song>/` folders: one copy of the audio plus one `.tja` per source (e.g. `Idol (lstm).tja`, `Idol (transformer).tja`, `Idol (human).tja`), so models can be compared song by song in a TJA simulator. Filter with `songs` (exact titles) or `n_songs`; `export.json` records where every chart came from.
 
 ### Training runs
@@ -86,7 +92,7 @@ outputs/runs/<model>/<YYYYMMDD_HHMMSS>[-<alias>]-<split>-<extractor>/
     └── plots/            # *.png
 ```
 
-Set `ALIAS` in the config cell to label a run (letters, digits, `_` and `.`), e.g. `20261020_194245-bs1_finetune-oni_v1-frame23ms`. To evaluate an earlier run, point `RUN_DIR` at its folder in the cell after "Make predictions on the test song" and call `load_run`. `outputs/` is `<repo>/outputs` (gitignored) unless `DONDER_OUTPUTS` is set. The pre-refactor PACE model lives in `outputs/runs/taikonation/20261015_203543-pace_legacy-oni_v1-frame23ms/` on machines that have copied it.
+Set `ALIAS` in the config cell to label a run (letters, digits, `_` and `.`), e.g. `20261020_194245-bs1_finetune-oni_v1-frame23ms`. To evaluate a saved run, open `06_evaluation.ipynb` in a fresh kernel and point `RUN_DIR` at its folder. It restores the model and data settings from the saved config (including embedded config for runs missing the sidecar), and loads only test data. The matching feature cache, train normalization, failure list and original split manifest must already be available; it never retrains or extracts features. `outputs/` is `<repo>/outputs` (gitignored) unless `DONDER_OUTPUTS` is set. The pre-refactor PACE model lives in `outputs/runs/taikonation/20261015_203543-pace_legacy-oni_v1-frame23ms/` on machines that have copied it.
 
 Feature caches and runs move between PACE and a laptop with rsync, never git:
 
@@ -147,4 +153,30 @@ Precision, recall, and F1 score are reported for both evaluations.
 
 ### Autoregressive evaluation
 
-Teacher-forced scores are optimistic, because the model's note-history input comes from the human chart. `generate_autoregressive` in `03_train_lstm.ipynb` keeps only the audio part of each window and feeds back the model's own last 15 sampled notes, one 23 ms step at a time. Each test chart is scored raw and "clean" (back-to-back notes removed) with the F1 metrics above plus TaikoNation's DCHuman, OCHuman, Over-PSpace and HI-PSpace.
+Teacher-forced scores are optimistic, because the model's note-history input comes from the human chart. `generate_autoregressive` in `src/donderformer/evaluation.py`, used by `06_evaluation.ipynb`, keeps only the audio part of each window and feeds back the model's own last 15 sampled notes, one 23 ms step at a time. Each test chart is scored raw and "clean" (back-to-back notes removed) with the F1 metrics above plus TaikoNation's DCHuman, OCHuman, Over-PSpace and HI-PSpace.
+
+Evaluation helpers can be checked without full data or trained runs: `python -m unittest discover -s tests -v`.
+
+## Saved-chart comparisons
+
+Notebook 06 now counts held-note starts for onset/joint F1, adds binary/type-aware
+P-Space over configurable windows, and compares density and Don/Ka ratios with
+training-human reference bands per merged Oni star group. Existing eight-frame
+paper metrics and exporter formats remain available. All provisional settings
+live in the single `CONFIG` dict in `evaluation_config.py`.
+
+`evaluate_saved_charts` scores any model's saved NPZs without a checkpoint; extended
+results and random controls are written alongside legacy files in `analysis/`.
+`07_compare_models.ipynb` pairs chart IDs for model statistics and HI P-Space plots;
+it works with LSTM/random while Transformer outputs are pending. Set `MODEL_RUNS`
+in the shared configuration to the saved run directories. Historical frame-counted
+F1 must be recomputed from saved charts. See [evaluation definitions, outputs and
+limitations](docs/evaluation.md) before interpreting the comparison.
+
+Current comparisons use non-empty HI pattern precision as primary, matching-human
+Overall P-Space ratios, sparse star-group merging (minimum 30 training charts),
+and one pre-declared retention test. Secondary p-values are Holm-corrected. Random
+density is excluded from comparison summaries. Existing coverage/normalization
+keys remain in per-chart JSON; legacy eight-frame paper metrics are unchanged.
+The real manifest grouping/count report is in `outputs/analysis/oni_v1/`; cache
+failure exclusions will be applied when matching feature caches are restored.
