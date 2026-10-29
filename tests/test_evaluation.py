@@ -15,6 +15,7 @@ import numpy as np
 import torch
 
 from donderformer import evaluation as ev
+from donderformer.data.taiko_dataset import Window
 from donderformer.data.data_splitter import manifest_hash
 from donderformer.data.feature_extractor import FeatureExtractor
 from donderformer.models.taikonation import TaikoNationBaseline
@@ -87,6 +88,36 @@ class MetricsTests(unittest.TestCase):
         np.testing.assert_array_equal(result, ev.generate_autoregressive(RecordingModel(), changed, 'cpu', seed=43))
 
 
+    def test_ar_saved_window_and_zero_history(self):
+        class RecordingModel(torch.nn.Module):
+            def __init__(self, window):
+                super().__init__()
+                self.window = window
+                self.inputs = []
+            def forward(self, x):
+                self.inputs.append(x.cpu().numpy().copy())
+                logits = torch.full((len(x), 4, 7), -1000., device=x.device)
+                logits[:, :, 2] = 0
+                return logits
+        for window in (Window(history=12, look_forward=3),
+                       Window(audio_frames=20, history=0, look_forward=4)):
+            with self.subTest(window=window):
+                x = np.full((3, window.n_inputs), 9, dtype=np.float32)
+                model = RecordingModel(window)
+                result = ev.generate_autoregressive(model, x, 'cpu', seed=43)
+                np.testing.assert_array_equal(result, np.full(6, 2))
+                for i, values in enumerate(model.inputs):
+                    self.assertEqual(values.shape, (1, window.n_inputs))
+                    np.testing.assert_array_equal(values[0, :window.audio_frames*80], 9)
+                    history = np.zeros((window.history, 7), dtype=np.float32)
+                    length = min(i, window.history)
+                    if length:
+                        history[-length:] = np.eye(7)[np.full(length, 2)]
+                    np.testing.assert_array_equal(values[0, window.audio_frames*80:], history.ravel())
+                changed = x.copy(); changed[:, window.audio_frames*80:] = -99
+                np.testing.assert_array_equal(result, ev.generate_autoregressive(RecordingModel(window), changed, 'cpu', seed=43))
+
+
 class SavedRunTests(unittest.TestCase):
     def setUp(self):
         torch.set_num_threads(1)
@@ -129,6 +160,41 @@ class SavedRunTests(unittest.TestCase):
         torch.save(checkpoint, self.run/'model.pt')
         (self.run/'config.json').unlink()
         ev.load_evaluation_run(self.run, self.paths)
+
+    def test_window_config_and_oni_v2_split(self):
+        # The newer split supplies LEVEL directly; no raw TJA or EDA is needed.
+        split = self.paths.split_dir('oni_v2'); split.mkdir()
+        (split/'manifest.csv').write_bytes((self.paths.split_dir('synthetic')/'manifest.csv').read_bytes())
+        np.savez(self.extractor.normalization_path(self.paths, 'oni_v2'),
+                 mean=np.zeros(80), std=np.ones(80), manifest_sha256=manifest_hash(self.paths, 'oni_v2'))
+        from donderformer.chart_evaluation import load_reference_context
+        for window in (Window(), Window(history=12, look_forward=3),
+                       Window(audio_frames=20, history=0, look_forward=4)):
+            with self.subTest(window=window):
+                data = dict(split='oni_v2', features=self.extractor.id,
+                            extractor=asdict(self.extractor), window=window.to_dict())
+                save_run(self.run, TaikoNationBaseline(window, dropout=.35),
+                         dict(model='taikonation', data=data, dropout=.35), losses={})
+                model, config, dataset = ev.load_evaluation_run(self.run, self.paths)
+                self.assertEqual(dataset.split, 'oni_v2')
+                self.assertEqual(model.window, window)
+                self.assertEqual(dataset.window, window)
+                self.assertEqual(model.dropout.p, .35)
+                x, y = dataset.chart_windows('chart0')
+                probs = ev.predict_teacher_forced(model, x, 'cpu', batch_size=2)
+                self.assertEqual(probs.shape, y.shape)
+                self.assertEqual(len(ev.generate_autoregressive(model, x, 'cpu')), 9)
+                context = load_reference_context(self.paths, dataset.split, dataset.extractor)
+                self.assertEqual(set(context.test_humans), {'chart0', 'chart1'})
+                self.assertFalse(self.paths.raw.exists())
+
+    def test_incomplete_or_unsupported_saved_window(self):
+        for settings, message in ((dict(audio_frames=16), 'Saved data.window'),
+                                  (Window(targets=3).to_dict(), 'four-target')):
+            config = dict(model='taikonation', data=dict(split='synthetic', features='frame23ms', window=settings))
+            (self.run/'config.json').write_text(json.dumps(config))
+            with self.assertRaisesRegex(ValueError, message):
+                ev.load_evaluation_run(self.run, self.paths)
 
     def test_missing_inputs(self):
         with self.assertRaisesRegex(FileNotFoundError, 'Set RUN_DIR'):
@@ -193,9 +259,20 @@ class SavedRunTests(unittest.TestCase):
         ast.parse(code)
         self.assertNotIn('test_dataset', code)
         self.assertNotIn('generate_autoregressive', code)
+        values = {n.targets[0].id: ast.literal_eval(n.value)
+                  for n in ast.parse(code).body if isinstance(n, ast.Assign)
+                  and isinstance(n.targets[0], ast.Name) and isinstance(n.value, ast.Constant)}
+        self.assertEqual({k: values[k] for k in ('SPLIT','AUDIO_FRAMES','HISTORY','LOOK_FORWARD','DROPOUT')},
+                         dict(SPLIT='oni_v2', AUDIO_FRAMES=16, HISTORY=15, LOOK_FORWARD=0, DROPOUT=.2))
+        self.assertIn('"window": WINDOW.to_dict()', code)
+        self.assertIn('dropout=DROPOUT', code)
+        for cell in notebook['cells']:
+            if cell['cell_type'] == 'code':
+                self.assertEqual(cell['outputs'], [])
+                self.assertIsNone(cell['execution_count'])
         save_cell = next(c for c in notebook['cells'] if c['cell_type']=='code' and 'checkpoint = save_run(' in ''.join(c['source']))
         namespace = dict(RUN_DIR=self.run, model=self.model, MODEL_NAME='taikonation', ALIAS='',
-                         DATA_INFO=self.config['data'], HPARAMS={}, device='cpu', train_losses=[],
+                         DATA_INFO=self.config['data'], DROPOUT=.2, HPARAMS={}, device='cpu', train_losses=[],
                          val_losses=[], finetune_train_losses=[], finetune_val_losses=[])
         exec(''.join(save_cell['source']), namespace)
         ev.load_evaluation_run(self.run, self.paths)

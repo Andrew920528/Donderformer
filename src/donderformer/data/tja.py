@@ -30,6 +30,7 @@ IGNORED_COMMANDS = {
     "#BARLINEON",
     "#BARLINEOFF",
     "#SCROLL",
+    "#LYRIC",       # display-only text
 }
 
 DISALLOWED_COMMANDS = {
@@ -191,13 +192,17 @@ def validate_chart(lines):
                 open_long_note = "roll"
                 continue
 
+            if c == "9" and open_long_note == "kusudama":
+                # Easier courses often write a kusudama as 9…9…8; the second 9 continues it.
+                continue
+
             if c in {"7", "9"}:
                 playable_notes += 1
 
                 if open_long_note is not None:
                     reasons.append("nested_long_note")
 
-                open_long_note = "denden"
+                open_long_note = "kusudama" if c == "9" else "denden"
                 continue
 
             if c == "8":
@@ -221,7 +226,7 @@ FORBIDDEN_COMMANDS = {
 
 ALLOWED_COMMANDS = {
     "MEASURE", "GOGOSTART", "GOGOEND",
-    "SCROLL", "BARLINEON", "BARLINEOFF"
+    "SCROLL", "BARLINEON", "BARLINEOFF", "LYRIC"
 }
 
 
@@ -258,11 +263,14 @@ def parse_events(lines, bpm, offset, where="chart"):
                 events.append((opened[0], opened[1], time))
                 opened = None
 
+            elif note == "9" and opened is not None and opened[2] == "9":
+                pass    # 9…9…8: a kusudama continued, not a new long note
+
             elif note in LONG_START:
                 if opened is not None:
                     raise ValueError(f"{where}: nested long note")
 
-                opened = (time, LONG_START[note])
+                opened = (time, LONG_START[note], note)
 
             elif note in ONSET:
                 if opened is not None:

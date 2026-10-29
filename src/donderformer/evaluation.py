@@ -3,7 +3,7 @@
 Onset/joint F1 count held-note starts and use greedy one-to-one matching (nearest, earlier frame breaks ties).
 OCHuman-style recall allows prediction reuse; paper OCHuman includes empty frames.
 The paper pattern metrics use unique eight-frame binary patterns, out of 256.
-TaikoNation generation assumes 16 audio frames, 15 history frames and 4 targets.
+TaikoNation generation restores audio/history windows and supports four targets.
 Sampling generators belong to the caller so notebook sampling order stays explicit.
 """
 from __future__ import annotations
@@ -154,10 +154,18 @@ def generate_autoregressive(model, X, device, seed=None):
     """
     Autoregressive Taiko chart generation.
 
-    X: preprocessed windows, shape (N, 1385)
-    Only X[:, :1280] (audio) is used.
+    X: preprocessed windows, shape (N, A*80 + H*7).
+    Audio/history sizes come from model.window; legacy callers use Run 1 defaults.
     Ground-truth note history is NEVER used.
     """
+    from donderformer.data.taiko_dataset import Window
+
+    window = getattr(model, "window", Window())
+    if window.targets != 4:
+        raise ValueError("Evaluation requires four-target windows.")
+    if X.ndim != 2 or X.shape[1] != window.n_inputs:
+        raise ValueError(f"Expected windows with {window.n_inputs} inputs, got {X.shape}.")
+    history_frames = window.history
     model.eval()
     rng = np.random.default_rng(CONFIG["AR_SEED"] if seed is None else seed)
 
@@ -173,16 +181,16 @@ def generate_autoregressive(model, X, device, seed=None):
     eye = np.eye(7, dtype=np.float32)
 
     # Keep only audio; discard ground-truth note history
-    audio = X[:, :1280].astype(np.float32)
+    audio = X[:, :window.audio_frames * 80].astype(np.float32)
 
     with torch.inference_mode():
         for t in range(total_steps):
 
             if t < n:
-                # Previous 15 GENERATED notes
-                history = np.zeros((15, 7), dtype=np.float32)
+                # Previous GENERATED notes
+                history = np.zeros((history_frames, 7), dtype=np.float32)
 
-                start = max(0, t - 15)
+                start = max(0, t - history_frames)
                 previous = generated[start:t]
 
                 if len(previous) > 0:
@@ -325,8 +333,9 @@ def calculate_f1_metrics(human, predicted, tolerance=None):
 def load_evaluation_run(run_dir, paths, device="cpu"):
     """Restore a saved baseline and its test data without writing or training.
 
-    Sidecar config takes precedence, as in runs.load_run. Older runs may store
-    only a feature ID; decode that ID without needing to recreate the cache.
+    Sidecar config takes precedence, as in runs.load_run. Restore data.window
+    and dropout from newer runs; translate legacy flat window fields. Older
+    feature IDs are decoded without needing to recreate the cache.
     """
     import json
     import re
@@ -334,7 +343,7 @@ def load_evaluation_run(run_dir, paths, device="cpu"):
 
     from donderformer.data.data_splitter import read_manifest
     from donderformer.data.feature_extractor import FeatureExtractor
-    from donderformer.data.taiko_dataset import TaikoDataset
+    from donderformer.data.taiko_dataset import TaikoDataset, Window
     from donderformer.models.taikonation import TaikoNationBaseline
 
     run_dir = Path(run_dir).expanduser()
@@ -351,14 +360,26 @@ def load_evaluation_run(run_dir, paths, device="cpu"):
     if config.get("model") != "taikonation":
         raise ValueError("Evaluation requires a saved config with model='taikonation'.")
     data = config.get("data", {})
-    required = ("split", "features", "audio_frames", "history_frames", "target_frames")
+    required = ("split", "features")
     missing = [key for key in required if key not in data]
     if missing:
         raise ValueError(f"Saved run configuration lacks data fields {missing}; "
                          "restore its original config.json rather than using training defaults.")
-    window = {key: data[key] for key in required[2:]}
-    if tuple(window.values()) != (16, 15, 4):
-        raise ValueError(f"TaikoNation requires window sizes (16, 15, 4), got {window}.")
+    if "window" in data:
+        settings = data["window"]
+        required_window = ("audio_frames", "history", "look_forward", "targets")
+        if not isinstance(settings, dict) or any(key not in settings for key in required_window):
+            raise ValueError("Saved data.window must include audio_frames, history, look_forward, and targets.")
+        window = Window(**settings)
+    else:
+        legacy = ("audio_frames", "history_frames", "target_frames")
+        missing = [key for key in legacy if key not in data]
+        if missing:
+            raise ValueError(f"Saved run configuration lacks data fields {missing}; restore its original config.json.")
+        window = Window(audio_frames=data["audio_frames"], history=data["history_frames"],
+                        look_forward=0, targets=data["target_frames"])
+    if window.targets != 4:
+        raise ValueError("Evaluation requires four-target windows; restore a supported checkpoint configuration.")
     if "extractor" in data:
         extractor = FeatureExtractor(**data["extractor"])
     else:
@@ -401,12 +422,12 @@ def load_evaluation_run(run_dir, paths, device="cpu"):
             "failure list) from PACE, or point DataPaths/DONDER_DATA at it. This notebook does not extract features."
         )
     # TaikoDataset also checks the normalization's manifest hash.
-    dataset = TaikoDataset(paths, data["split"], extractor, "test", **window)
+    dataset = TaikoDataset(paths, data["split"], extractor, "test", window)
     if not any(dataset.lengths):
         raise ValueError("Test charts contain no complete four-target windows to evaluate.")
     if "model_state_dict" not in checkpoint:
         raise ValueError(f"{checkpoint_path} lacks model_state_dict; restore a notebook 03 checkpoint.")
-    model = TaikoNationBaseline().to(device)
+    model = TaikoNationBaseline(window, dropout=config.get("dropout", 0.2)).to(device)
     model.load_state_dict(checkpoint["model_state_dict"])
     model.eval()
     return model, config, dataset

@@ -20,13 +20,13 @@ env/
 .idea/
 
 # Data: raw audio/charts and preprocessing output move with rsync, never git.
-# data/splits/ is committed so splits are reproducible.
+# data/splits/ and data/eda/ (analysis plots, audio durations) are committed.
 data/raw/
 data/features/
 
-# Checkpoints and generated charts
+# Trained weights and inferences
 outputs/
-*.pt
+
 
 # Playground is scratch space; only its README and the toy dataset are tracked
 playground/*

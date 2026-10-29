@@ -26,6 +26,7 @@ Donderformer/
 │       ├── feature_extractor.py  # FeatureExtractor
 │       └── taiko_dataset.py      # TaikoDataset, SongBatchSampler
 ├── notebooks/               # one notebook per process
+│   ├── 00_dataset_analysis.ipynb # dataset and split EDA
 │   ├── 01_make_split.ipynb
 │   ├── 02_extract_features.ipynb
 │   ├── 03_train_lstm.ipynb
@@ -35,7 +36,7 @@ Donderformer/
 │   ├── 07_compare_models.ipynb # saved LSTM/Transformer/random comparison
 │   ├── 07_exports.ipynb     # generated charts as simulator-ready song folders
 │   └── reference/           # earlier notebooks kept as-is for comparison
-├── data/                    # see data/README.md; only data/splits/ is committed
+├── data/                    # splits/ and eda/ are committed; raw/features stay local
 ├── outputs/                 # checkpoints and generated charts (gitignored)
 └── playground/              # scratch (gitignored) + toy_dataset/ (committed)
 ```
@@ -71,9 +72,9 @@ mkdir -p "$REPO/data/raw" && mv "$ESE"/* "$REPO/data/raw/" && rmdir "$ESE"
 
 ## Pipeline
 
-1. **`01_make_split.ipynb`** uses a `DataSplitter` (courses, genres, BPM and level ranges, ratios, seed) to pick charts and split them by audio file. It writes `splits/<name>/` with `config.json`, `manifest.csv` and a `report.json` of what was kept, what was lost and why, plus distributions. Splits are never edited in place; a new filter means a new name. `data/splits/oni_v1` is the Oni split used so far.
+1. **`01_make_split.ipynb`** uses a `DataSplitter` (courses, genres, BPM and level ranges, ratios, seed) to pick charts and split them by audio file. It writes `splits/<name>/` with `config.json`, `manifest.csv` and a `report.json` of what was kept, what was lost and why, plus distributions. Splits are never edited in place; a new filter means a new name. `data/splits/oni_v2` is the current stratified Oni training split; `oni_v1` remains the split for older saved runs. Dataset and split analysis artifacts live in `data/eda/`.
 2. **`02_extract_features.ipynb`** uses a `FeatureExtractor` (frame length) to cache log-mel per audio file and labels per chart under `features/<extractor.id>/`, then fits that split's normalization on its train songs. Cached songs are skipped, so new splits are cheap.
-3. **`03_train_lstm.ipynb`** loads `TaikoDataset(paths, split, extractor, part, audio_frames, history_frames, target_frames)`, which cuts windows on the fly, then trains the CNN-LSTM baseline (stage 1, then a lower-learning-rate fine-tune) and saves it to a new run folder (see below). `06_evaluation.ipynb` loads that saved run and evaluates on the test charts, both teacher-forced (the model sees the human chart's previous notes) and autoregressive (it sees only its own generated notes, as it would on a new song), and writes metrics, generated charts and plots to that run's `eval/` folder. Results of the full-data PACE run are in [docs/results.md](docs/results.md).
+3. **`03_train_lstm.ipynb`** loads `TaikoDataset(paths, split, extractor, part, window)`, which cuts windows on the fly, then trains the CNN-LSTM baseline (stage 1, then a lower-learning-rate fine-tune) and saves it to a new run folder (see below). `06_evaluation.ipynb` loads that saved run and evaluates on the test charts, both teacher-forced (the model sees the human chart's previous notes) and autoregressive (it sees only its own generated notes, as it would on a new song), and writes metrics, generated charts and plots to that run's `eval/` folder. Results of the full-data PACE run are in [docs/results.md](docs/results.md).
 4. **`04_train_transformer`, `05_generate_songs`** are placeholders for now.
 5. **`07_exports.ipynb`** uses a `ChartExporter` (`src/donderformer/exporter.py`) to package generated charts from one or more runs as `outputs/exports/<datetime>-<alias>/<song>/` folders: one copy of the audio plus one `.tja` per source (e.g. `Idol (lstm).tja`, `Idol (transformer).tja`, `Idol (human).tja`), so models can be compared song by song in a TJA simulator. Filter with `songs` (exact titles) or `n_songs`; `export.json` records where every chart came from.
 
@@ -99,6 +100,12 @@ Feature caches and runs move between PACE and a laptop with rsync, never git:
 ```bash
 rsync -avzP yhsu72@login-ice.pace.gatech.edu:~/scratch/Taiko_DL/Donderformer/data/features/frame23ms/ /Users/xuyanshuo/projects/Taiko_DL/Donderformer/data/features/frame23ms/
 ```
+
+Notebook 03 keeps its constants together at the top: `AUDIO_FRAMES`, `HISTORY`,
+`LOOK_FORWARD`, `DROPOUT`, `MODEL_NAME`, and `ALIAS`. Run 1 defaults are
+`AUDIO_FRAMES=16`, `HISTORY=15`, `LOOK_FORWARD=0`, and `DROPOUT=0.2`, using
+`SPLIT="oni_v2"`. A saved run records `data.window` and dropout; notebook 06
+restores them, while older configurations remain supported.
 
 With the default window sizes each sample has `X` of length 1385 and `Y` of shape `(4, 7)`.
 

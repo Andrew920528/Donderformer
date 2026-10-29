@@ -1,27 +1,35 @@
 """TaikoNation's CNN-LSTM baseline.
 
-Input: one flattened window of 16 audio frames (16 x 80 mel) followed by the
-previous 15 note frames (15 x 7 one-hot), 1385 values in total.
-Output: logits for the next 4 frames, shape ``(batch, 4, 7)``.
+Input: ``(batch, window.n_inputs)``, a flattened ``TaikoDataset`` window.
+Output: logits ``(batch, window.targets, 7)``.
+
+The LSTM runs over the A audio rows, one per frame. Rows i-H .. i-1 are multiplied
+by that frame's note (one-hot + 1); every other row (older than the history, or
+frame i onward) by ones.
 """
 from __future__ import annotations
 
 import torch
 import torch.nn as nn
 
+from donderformer.data.taiko_dataset import N_CLASSES, N_MELS, Window
+
 
 class TaikoNationBaseline(nn.Module):
-    def __init__(self):
+    def __init__(self, window: Window = Window(), dropout: float = 0.2):
         super().__init__()
+        self.window = window
+        self.audio_frames = window.audio_frames
+        self.n_inputs = window.n_inputs
 
-        # Split the 1385 inputs; split them back into audio and notes
-        self.conv1 = nn.Conv1d(80, 16, kernel_size=3, padding=1)
+        self.conv1 = nn.Conv1d(N_MELS, 16, kernel_size=3, padding=1)
         self.pool1 = nn.MaxPool1d(2)
 
         self.conv2 = nn.Conv1d(16, 32, kernel_size=3, padding=1)
         self.pool2 = nn.MaxPool1d(2)
 
-        self.audio_fc = nn.Linear(32 * 4, 128)
+        # (batch, A, 8): one row per LSTM step
+        self.audio_fc = nn.Linear(32 * (self.audio_frames // 4), 8 * self.audio_frames)
 
         self.lstm1 = nn.LSTM(
             input_size=8,
@@ -35,15 +43,18 @@ class TaikoNationBaseline(nn.Module):
             batch_first=True
         )
 
-        self.output = nn.Linear(64, 28)
+        self.output = nn.Linear(64, window.targets * N_CLASSES)
 
         self.relu = nn.ReLU()
-        self.dropout = nn.Dropout(0.8)
+        self.dropout = nn.Dropout(dropout)
 
     # send the audio through the CNN to find useful patters in the audio features
     def forward(self, x):
-        audio = x[:, :1280].reshape(-1, 16, 80)
-        notes = x[:, 1280:].reshape(-1, 15, 7)
+        A, H = self.audio_frames, self.window.history
+        if x.shape[1] != self.n_inputs:
+            raise ValueError(f"expected {self.n_inputs} inputs ({A} audio + {H} note frames), got {x.shape[1]}")
+        audio = x[:, :A * N_MELS].reshape(-1, A, N_MELS)
+        notes = x[:, A * N_MELS:].reshape(x.shape[0], H, N_CLASSES)
 
         audio = audio.transpose(1, 2)
 
@@ -56,24 +67,12 @@ class TaikoNationBaseline(nn.Module):
 
         audio = audio.flatten(1)
         audio = self.relu(self.audio_fc(audio))
-        audio = audio.reshape(-1, 16, 8)
+        audio = audio.reshape(-1, A, 8)
 
-        note_bias = torch.ones(
-            notes.shape[0], 15, 1,
-            device=notes.device,
-            dtype=notes.dtype
-        )
-
-        note_history = torch.cat([notes, note_bias], dim=2)
-
-        current_placeholder = torch.ones(
-            notes.shape[0], 1, 8,
-            device=notes.device,
-            dtype=notes.dtype
-        )
-
+        ones = lambda rows, width: torch.ones(notes.shape[0], rows, width, device=notes.device, dtype=notes.dtype)
+        note_history = torch.cat([notes, ones(H, 1)], dim=2)
         note_context = torch.cat(
-            [note_history, current_placeholder],
+            [ones(self.window.past_frames - H, 8), note_history, ones(1 + self.window.look_forward, 8)],
             dim=1
         )
 
@@ -92,4 +91,4 @@ class TaikoNationBaseline(nn.Module):
         final = combined[:, -1, :]
         logits = self.output(final)
 
-        return logits.reshape(-1, 4, 7)
+        return logits.reshape(-1, self.window.targets, N_CLASSES)
