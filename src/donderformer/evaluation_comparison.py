@@ -78,12 +78,12 @@ def load_model_results(model_runs, config=None):
         folder = analysis_dir(run_dir, config)
         if not (folder/'results.json').is_file():
             if model == 'lstm':
-                raise FileNotFoundError(f'LSTM evaluation missing: {folder}/results.json. Run notebook 06 on saved charts first.')
+                raise FileNotFoundError(f'LSTM evaluation missing: {folder}/results.json. Run notebook 05 on saved charts first.')
             skipped[model] = f'No scored results at {folder}'
             continue
         meta = json.loads((folder/'config.json').read_text())
         if meta.get('schema') != ANALYSIS_SCHEMA:
-            raise ValueError(f'{model}: incompatible analysis schema; rescore saved charts with notebook 06 scoring-only recipe')
+            raise ValueError(f'{model}: incompatible analysis schema; rescore saved charts with notebook 05 scoring-only recipe')
         # Model paths and plotting settings can vary; scoring/reference choices cannot.
         keys = ('FRAME_MS', 'ONSET_TOLERANCE_FRAMES', 'PATTERN_WINDOWS_FRAMES', 'PERCENTILE_BAND',
                 'DIFFICULTY_FIELDS', 'RANDOM_BASELINE_SEEDS', 'HI_PRIMARY', 'MIN_CHARTS_PER_BAND_GROUP')
@@ -105,7 +105,7 @@ def load_model_results(model_runs, config=None):
         raise ValueError('Supply an evaluated lstm run in CONFIG["MODEL_RUNS"]')
     random_folder = Path(sources['lstm'])/'random_baseline'
     if not (random_folder/'results.json').is_file():
-        raise FileNotFoundError(f'Random baseline missing: {random_folder}. Complete notebook 06 first.')
+        raise FileNotFoundError(f'Random baseline missing: {random_folder}. Complete notebook 05 first.')
     random_meta = json.loads((random_folder/'config.json').read_text())
     if random_meta.get('schema') != ANALYSIS_SCHEMA or random_meta['provenance'] != reference:
         raise ValueError('Random baseline reference provenance differs from model scores')

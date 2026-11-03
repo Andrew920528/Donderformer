@@ -2,8 +2,8 @@
 
 All provisional choices are in the **one** `CONFIG` dictionary in
 `src/donderformer/evaluation_config.py`, each marked `PLACEHOLDER - team to confirm`.
-Notebook 06 performs optional saved CNN-LSTM inference, then calls the same
-`evaluate_saved_charts` scorer that any other model can use. Notebook 07 compares
+Notebook 05 performs optional saved CNN-LSTM inference, then calls the same
+`evaluate_saved_charts` scorer that any other model can use. Notebook 06 compares
 its saved results; neither notebook trains, extracts features, or changes splits.
 `07_exports.ipynb` remains the simulator exporter.
 
@@ -13,7 +13,7 @@ Inference needs a notebook-03 `model.pt`, saved run configuration, matching mel
 features and labels, split manifest, train normalization, and any failure list.
 Scoring existing charts needs **no checkpoint, mel features, or normalization**:
 only generated NPZ files, original cached train/test labels and difficulty metadata.
-The independent recipe at the end of notebook 06 shows this path.
+The independent recipe at the end of notebook 05 shows this path.
 
 `FeatureExtractor.labels_path` locates one-hot labels at
 `features/<extractor>/songs/<audio_id>/labels/<chart_id>.npy`. The existing failure
@@ -115,7 +115,7 @@ cache preparation, results, and runtime.
   seed metrics within chart before computing chart means and paired tests.
   **Random density is excluded because the control fixes the human note count;
   its active span may still differ.** Random summaries omit density and its
-  in-band flag, as do all notebook 07 comparison rows/tests. Don/Ka stays.
+  in-band flag, as do all notebook 06 comparison rows/tests. Don/Ka stays.
   Existing per-chart/seed density fields remain for compatibility, and
   `random_baseline/summary_notes.json` records the exclusion.
 
@@ -201,7 +201,7 @@ random baseline are required; DonderFormer may remain None. `PRIMARY_MODE` selec
 AR or teacher-forced result folders, and `PRIMARY_VERSION` selects raw or clean.
 The latter does not discard the other version from evaluation outputs.
 
-Notebook 07 writes `outputs/comparisons/<mode>_<version>/metrics.csv`,
+Notebook 06 writes `outputs/comparisons/<mode>_<version>/metrics.csv`,
 `wilcoxon.json`, `comparison.json`, and `plots/hi_pspace.png`, plus difficulty
 figures. It additionally writes `retention.json` and `primary_test.json`. Re-running the same mode/version replaces these comparison artifacts.
 IDs are intersected across available models and random, irrespective of row order.
