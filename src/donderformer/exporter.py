@@ -1,6 +1,6 @@
 """ChartExporter: package generated charts as song folders a TJA simulator can load.
 
-Each source is a folder of ``<chart_id>.npz`` files as ``06_evaluation`` writes them to
+Each source is a folder of ``<chart_id>.npz`` files as ``05_evaluation`` writes them to
 ``<run>/eval/ar_test/charts/`` (arrays ``generated``, ``clean`` and ``human``). Songs every source has
 are exported side by side, one ``.tja`` per source next to a single copy of the audio::
 

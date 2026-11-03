@@ -204,7 +204,7 @@ class SavedRunTests(unittest.TestCase):
             ev.load_evaluation_run(self.run, self.paths)
 
     def test_notebook_runs_and_resumes(self):
-        notebook = json.loads((REPO_ROOT/'notebooks/06_evaluation.ipynb').read_text())
+        notebook = json.loads((REPO_ROOT/'notebooks/05_evaluation.ipynb').read_text())
         namespace = {}
         show_patch = patch.object(plt, 'show')
         show_patch.start()

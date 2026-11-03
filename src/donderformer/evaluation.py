@@ -479,3 +479,45 @@ def plot_chart_preview(sequences, path, config, max_steps=None):
     fig.savefig(path, dpi=config['PLOT_DPI'], bbox_inches='tight')
     plt.show()
     plt.close(fig)
+
+
+def load_donderformer_run(run_dir, paths, device="cpu"):
+    """Restore a notebook 04 DonderFormer run and its test charts without writing or training."""
+    import json
+    from pathlib import Path
+
+    from donderformer.data.chart_dataset import ChartWindowDataset, WindowConfig
+    from donderformer.data.feature_extractor import FeatureExtractor
+    from donderformer.models.donderformer import DonderFormer, DonderFormerConfig
+
+    run_dir = Path(run_dir).expanduser()
+    checkpoint_path = run_dir / "model.pt"
+    if not checkpoint_path.is_file():
+        raise FileNotFoundError(f"Saved checkpoint missing: {checkpoint_path}. Copy the notebook 04 run from PACE.")
+    config = json.loads((run_dir / "config.json").read_text())
+    if config.get("model") != "donderformer":
+        raise ValueError("load_donderformer_run needs a saved config with model='donderformer'.")
+    data = config["data"]
+    if "extractor" not in data:
+        raise ValueError("Saved run lacks data.extractor; it predates the notebook 04 config format.")
+    extractor = FeatureExtractor(**data["extractor"])
+    window = WindowConfig(**config["window"])
+    model = DonderFormer(DonderFormerConfig(**config["model_config"]), window).to(device)
+    checkpoint = torch.load(checkpoint_path, map_location="cpu", weights_only=True)
+    model.load_state_dict(checkpoint["model_state_dict"])
+    model.eval()
+    dataset = ChartWindowDataset(paths, data["split"], extractor, "test", window)
+    return model, config, dataset
+
+
+def donderformer_chart(model, dataset, chart_id, seed, sampling):
+    """(human, generated) class sequences for one chart of ``dataset``; ``sampling``: temperature, top_p."""
+    from donderformer.data.tokens import events_to_classes
+    from donderformer.models.donderformer import generate_chart
+
+    c = dataset.chart_ids.index(chart_id)
+    row = dataset.charts[c]
+    human = events_to_classes(dataset.events[c], dataset.lengths[c])
+    generated = generate_chart(model, dataset.mel[row["audio_id"]].astype(np.float32), row["course"],
+                               dataset.levels[c], seed=seed, **sampling)
+    return human, generated

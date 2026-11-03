@@ -163,7 +163,7 @@ class ArtifactTests(unittest.TestCase):
         # Execute the comparison notebook, including its optional-model path.
         from donderformer.paths import REPO_ROOT
         config = dict(self.context.config, MODEL_RUNS={'lstm': str(self.root/'run'), 'donderformer': None})
-        notebook = json.loads((REPO_ROOT/'notebooks/07_compare_models.ipynb').read_text())
+        notebook = json.loads((REPO_ROOT/'notebooks/06_compare_models.ipynb').read_text())
         namespace = {}
         with patch('donderformer.evaluation_config.evaluation_config', return_value=config), patch('donderformer.paths.outputs_dir', return_value=self.root/'outputs'):
             for cell in notebook['cells']:
