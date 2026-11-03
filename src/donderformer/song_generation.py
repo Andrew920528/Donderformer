@@ -25,7 +25,9 @@ from donderformer.data.audio import log_mel_features
 from donderformer.data.feature_extractor import FeatureExtractor
 from donderformer.data.tja_export import write_tja
 from donderformer.exporter import NAME_PATTERN, folder_name
-from donderformer.paths import DataPaths, outputs_dir
+from donderformer.paths import REPO_ROOT, DataPaths, outputs_dir
+
+LOW_BANDS = 20                 # mel bands treated as "kick" when choosing the downbeat
 
 
 @dataclass
@@ -95,6 +97,48 @@ def lstm_windows(mel: np.ndarray, window) -> np.ndarray:
     return np.hstack([audio, np.zeros((n, window.history * 7), np.float32)])
 
 
+def onset_envelope(mel: np.ndarray) -> np.ndarray:
+    """Per-frame onset strength: positive spectral flux minus its ~0.5 s local mean, unit std."""
+    flux = np.maximum(np.diff(mel, axis=0, prepend=mel[:1]), 0).sum(axis=1)
+    env = np.maximum(flux - np.convolve(flux, np.ones(21) / 21, mode="same"), 0)
+    return env / (env.std() + 1e-8)
+
+
+def estimate_bpm_offset(mel: np.ndarray, frame_ms: float = 23, bpm: float | None = None,
+                        lo: float = 60.0, hi: float = 240.0, prefer: float = 160.0) -> tuple[float, float]:
+    """(bpm, TJA offset) from an unnormalized log-mel, by fitting a constant beat grid to onsets.
+
+    Every BPM in ``[lo, hi)`` (0.05 steps; pass ``bpm`` to keep it fixed) and every phase is
+    scored by the mean onset strength on its beats, weighted toward ``prefer`` to settle
+    half/double-tempo ties; a round x.0 / x.5 tempo wins when it scores within 3%. The bar
+    starts on the beat (mod 4) with the strongest low-band onsets. On the 12 toy songs this
+    found 11 BPMs exactly (one at double tempo) and 10 beat grids within 10 ms; bar lines
+    landed on the right beat about 60% of the time. Constant tempo only.
+    """
+    env = onset_envelope(mel)
+    fps, idx = 1000.0 / frame_ms, np.arange(len(env))
+    candidates = [float(bpm)] if bpm else np.arange(lo, hi, 0.05)
+    scored = []
+    for b in candidates:
+        period = fps * 60.0 / b
+        phases = np.arange(0, period, 0.25)
+        beats = phases[:, None] + np.arange(int((len(env) - 1) / period))[None, :] * period
+        s = np.interp(beats, idx, env).mean(axis=1)
+        j = int(s.argmax())
+        prior = np.exp(-0.5 * np.log2(b / prefer) ** 2)
+        scored.append((s[j] * prior, float(b), float(phases[j])))
+    score, best, phase = max(scored)
+    rounded = round(best * 2) / 2
+    for cand in scored:
+        if abs(cand[1] - rounded) < 1e-6 and cand[0] >= 0.97 * score:
+            score, best, phase = cand
+    period = fps * 60.0 / best
+    beats = phase + np.arange(int((len(env) - 1) / period)) * period
+    kick = np.interp(beats, idx, onset_envelope(mel[:, :LOW_BANDS]))
+    downbeat = int(np.argmax([kick[i::4].mean() for i in range(4)]))
+    return round(best, 2), round(-(phase + downbeat * period) / fps, 3)
+
+
 def generate_song(run: SavedRun, mel: np.ndarray, level=None, course="oni", seed=0) -> np.ndarray:
     """``(n_frames,)`` class ids. DonderFormer uses the run's saved sampling, level and course;
     the CNN-LSTM has no conditioning and ignores them."""
@@ -110,8 +154,9 @@ def export_songs(songs: list[dict], runs: dict[str, SavedRun], alias: str, versi
                  seed: int = 0) -> Path:
     """Chart every song with every run into a new ``outputs/exports/<datetime>-<alias>/`` folder.
 
-    ``songs``: dicts with ``audio`` (path) and optional ``title`` (default: file name), ``bpm``
-    (default 120), ``offset`` (default 0), ``level`` (star level for DonderFormer, default unknown).
+    ``songs``: dicts with ``audio`` (path; relative paths are from the repo root) and optional ``title`` (default: file name), ``bpm`` and
+    ``offset`` (numbers, or ``"auto"`` to estimate them from the audio; default ``"auto"``), and
+    ``level`` (star level for DonderFormer, default unknown).
     ``runs``: chart label -> loaded run; the label goes in each .tja's file name and TITLE.
     """
     from donderformer.evaluation import remove_adjacent_notes
@@ -127,8 +172,20 @@ def export_songs(songs: list[dict], runs: dict[str, SavedRun], alias: str, versi
 
     for song in songs:
         audio = Path(song["audio"]).expanduser()
+        if not audio.is_absolute():
+            audio = REPO_ROOT / audio         # not the notebook's working directory
         title = song.get("title") or audio.stem
-        bpm, offset, level = float(song.get("bpm") or 120.0), float(song.get("offset", 0.0)), song.get("level")
+        bpm, offset, level = song.get("bpm") or "auto", song.get("offset", "auto"), song.get("level")
+        offset = "auto" if offset is None else offset
+        if "auto" in (bpm, offset):
+            frame_ms = next(iter(runs.values())).extractor.frame_ms
+            est_bpm, est_offset = estimate_bpm_offset(log_mel_features(audio, frame_ms), frame_ms,
+                                                      bpm=None if bpm == "auto" else float(bpm))
+            print(f"{title}: estimated" + (f" bpm {est_bpm}" if bpm == "auto" else "")
+                  + (f" offset {est_offset}" if offset == "auto" else ""), flush=True)
+            bpm = est_bpm if bpm == "auto" else bpm
+            offset = est_offset if offset == "auto" else offset
+        bpm, offset = float(bpm), float(offset)
         name = folder_name(title)
         while name in used:
             name += "_"
