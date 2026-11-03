@@ -151,13 +151,14 @@ def generate_song(run: SavedRun, mel: np.ndarray, level=None, course="oni", seed
 
 
 def export_songs(songs: list[dict], runs: dict[str, SavedRun], alias: str, version: str = "clean",
-                 seed: int = 0) -> Path:
+                 seed: int = 0, snap_frames: int = 1) -> Path:
     """Chart every song with every run into a new ``outputs/exports/<datetime>-<alias>/`` folder.
 
     ``songs``: dicts with ``audio`` (path; relative paths are from the repo root) and optional ``title`` (default: file name), ``bpm`` and
     ``offset`` (numbers, or ``"auto"`` to estimate them from the audio; default ``"auto"``), and
     ``level`` (star level for DonderFormer, default unknown).
     ``runs``: chart label -> loaded run; the label goes in each .tja's file name and TITLE.
+    ``snap_frames``: notes may move up to this many 23 ms frames onto a simpler beat position.
     """
     from donderformer.evaluation import remove_adjacent_notes
 
@@ -204,7 +205,7 @@ def export_songs(songs: list[dict], runs: dict[str, SavedRun], alias: str, versi
                 classes = remove_adjacent_notes(classes)
             tja = write_tja(song_dir / f"{name} ({label}).tja", classes, frame_ms=run.extractor.frame_ms,
                             bpm=bpm, offset=offset, title=f"{title} ({label})", wave=audio.name,
-                            course="Oni", level=level)
+                            course="Oni", level=level, snap_frames=snap_frames)
             files[label] = tja.name
             print(f"{title} ({label}): {int((classes != 0).sum())} note frames", flush=True)
         items.append({"title": title, "audio": str(audio), "folder": name, "bpm": bpm, "offset": offset,
@@ -212,7 +213,7 @@ def export_songs(songs: list[dict], runs: dict[str, SavedRun], alias: str, versi
 
     (out / "export.json").write_text(json.dumps({
         "alias": alias, "created": datetime.now().isoformat(timespec="seconds"), "version": version,
-        "seed": seed, "runs": {label: str(run.run_dir) for label, run in runs.items()}, "items": items,
+        "seed": seed, "snap_frames": snap_frames, "runs": {label: str(run.run_dir) for label, run in runs.items()}, "items": items,
     }, indent=2, ensure_ascii=False), encoding="utf-8")
     print(f"Exported {len(items)} songs x {len(runs)} charts to {out}")
     return out

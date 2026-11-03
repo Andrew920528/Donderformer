@@ -50,6 +50,7 @@ class ChartExporter:
     songs: list[str] | None = None      # exact song titles to export; None = all
     n_songs: int | None = None          # only the first N songs (manifest order); ignored when songs is set
     frame_ms: int = 23
+    snap_frames: int = 1                # generated notes may move this many frames onto a simpler beat; human charts stay exact
     rows: list[dict] = field(init=False, repr=False)
 
     def __post_init__(self):
@@ -119,14 +120,15 @@ class ChartExporter:
                 tja = song_dir / f"{name} ({label}).tja"
                 write_tja(tja, classes, frame_ms=self.frame_ms, bpm=float(row["bpm"]),
                           offset=float(row["offset"]), title=f"{row['title']} ({label})",
-                          wave=audio.name, course="Oni", level=level)
+                          wave=audio.name, course="Oni", level=level,
+                          snap_frames=0 if label == "human" else self.snap_frames)
                 files[label] = {"tja": tja.name, "from": str(folder / f"{row['chart_id']}.npz")}
             items.append({"title": row["title"], "chart_id": row["chart_id"], "folder": name, "charts": files})
 
         (out / "export.json").write_text(json.dumps({
             "alias": self.alias, "created": datetime.now().isoformat(timespec="seconds"),
             "split": self.split, "version": self.version, "include_human": self.include_human,
-            "songs": self.songs, "n_songs": self.n_songs, "frame_ms": self.frame_ms,
+            "songs": self.songs, "n_songs": self.n_songs, "frame_ms": self.frame_ms, "snap_frames": self.snap_frames,
             "sources": {label: str(folder) for label, folder in self.sources.items()},
             "items": items,
         }, indent=2, ensure_ascii=False), encoding="utf-8")
