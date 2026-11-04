@@ -2,6 +2,7 @@
 import ast
 import csv
 import json
+import re
 import tempfile
 import unittest
 from dataclasses import asdict
@@ -212,7 +213,7 @@ class SavedRunTests(unittest.TestCase):
         for cell in notebook['cells']:
             if cell['cell_type'] == 'code':
                 source = ''.join(cell['source'])
-                source = source.replace('RUN_DIR = outputs_dir() / "runs" / "taikonation" / "<saved-run-folder>"', f'RUN_DIR = Path({str(self.run)!r})')
+                source = re.sub(r'^RUN_DIR = outputs_dir\(\).*$', f'RUN_DIR = Path({str(self.run)!r})', source, flags=re.MULTILINE)
                 source = source.replace('paths = DataPaths()', f'paths = DataPaths({str(self.paths.root)!r})')
                 exec(compile(source, '<evaluation notebook>', 'exec'), namespace)
         out = self.run/'eval'
